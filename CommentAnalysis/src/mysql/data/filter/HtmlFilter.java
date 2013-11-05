@@ -24,10 +24,20 @@ public class HtmlFilter implements FilterBase {
 		regex = "'''";
 		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll(" ");
 		
+		regex = "<[/]*[div|p|ul|ol|li]>";
+		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll("\r\n");
+		
+		regex = "<[/]*[s|S]pan>";
+		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll("\r\n");
+		
+		regex = "<br/>";
+		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll("\r\n");
+		
+		//过滤其他html标签
 		regex = "<[a-zA-Z/][^>]*[^(\\.h)]>";
 		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll("");
 		
-		return filter.getText(inprocess);
+		return filter.getText(inprocess.trim());
 	}
 
 }
