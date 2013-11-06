@@ -68,7 +68,7 @@ public class TXTCommentAnalyzer {
 					// 去掉自定义分隔符##**##
 					key = line.substring(this.commentSpliter.length());
 				}else{
-					content.append(line);
+					content.append(line+"\n");
 				}
 			}
 			//将最后一条注释放入map
@@ -151,7 +151,11 @@ public class TXTCommentAnalyzer {
 		}
 		int count = fileComments.size();
 		for(Map.Entry<String, Integer> entry:candidateCount.entrySet()){
-			if(entry.getValue()>=count/2){
+			/*
+			 * 这里模板出现的下限次数设为2意思是如果一个文件总共就两条注释的话，就必去全部出现模板，才识别出来
+			 * 如果有多于两条注释，那么至少在一半的注释中出现
+			 */
+			if(entry.getValue()>=2&&entry.getValue()>=count/2){
 				System.out.println(entry.getKey());
 			}
 		}
@@ -170,11 +174,11 @@ public class TXTCommentAnalyzer {
 		for(String line:lines){
 			line = line.trim();
 			//中文冒号或者英文冒号都要采用
-			String[] sp = line.split("：|:");
-			for(String s:sp){
-				s = filter.getText(s);
-				if(s.length()>0)
-					splits.add(s);
+			List<String> cands = filter.getText(line);
+			for(String c:cands){
+				if(c.length()>0){
+					splits.add(c);
+				}
 			}
 		}
 		return splits;
@@ -196,15 +200,6 @@ public class TXTCommentAnalyzer {
 		TXTCommentAnalyzer a = new TXTCommentAnalyzer(LxrType.function_definition);
 		System.out.println(a.getCommentsNumber());
 		System.out.println(a.getFileNumber());
-		
-//		String file = "/kernel/trace/trace.c";
-//		
-//		for(String c:a.getFileComments(file)){
-//			System.out.println(c);
-//		}
-//		System.out.println("########################");
-//		
-//		a.extractTemplate(file);
 		
 		for(String file:a.fileset){
 			System.out.println(file+":"+a.getFileComments(file).size());
