@@ -6,6 +6,7 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.ObjectInputStream.GetField;
+import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -25,6 +26,9 @@ public class TXTCommentAnalyzer {
 	private int lxr_type;
 	private String txtCommentFilePath;
 	private String commentSpliter;
+	private PrintWriter txtWriter;
+	private PrintWriter csvWriter;
+	
 	
 	//保存注释的内容，键为 注释的源代码的文件路径  值为 注释的内容
 	private Map<String,String> comments;
@@ -39,18 +43,64 @@ public class TXTCommentAnalyzer {
 		this.lxr_type = type;
 		this.txtCommentFilePath = path;
 		this.commentSpliter = spliter;
-		readContentToMap();
+		
+		try {
+			this.txtWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\txt\\"+LxrType.getTypeName(lxr_type)+".txt"));
+			this.csvWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\csv\\"+LxrType.getTypeName(lxr_type)+".csv"));
+		} catch (FileNotFoundException e1) {
+			e1.printStackTrace();
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+		
+		try {
+			File file = FileUtil.readableFile(this.txtCommentFilePath+"\\CLASSIFICATION_"+LxrType.getTypeName(lxr_type)+".txt");
+			readContentToMap(file);
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
+	
+	public TXTCommentAnalyzer(File file){
+		this(file,DEFAULTSPLITER);
+	}
+	
+	public TXTCommentAnalyzer(File file,String spliter){
+		this.lxr_type = -1;
+		this.txtCommentFilePath="";
+		this.commentSpliter = spliter;
+		this.readContentToMap(file);
+		
+		try {
+			this.txtWriter = new PrintWriter(FileUtil.writeableFile(file.getParent()+"\\txt\\allfiltered.txt"));
+			this.csvWriter = new PrintWriter(FileUtil.writeableFile(file.getParent()+"\\csv\\allfiltered.csv"));
+		} catch (FileNotFoundException e1) {
+			e1.printStackTrace();
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+	}
+	
+	
+	public void closeWriter(){
+		if(this.txtWriter!=null){
+			this.txtWriter.close();
+			this.txtWriter=null;
+		}
+		if(this.csvWriter!=null){
+			this.csvWriter.close();
+			this.csvWriter=null;
+		}
+	}
 	/**
 	 * 将制定类型的注释文件的内容全部读入到comments这个map中
 	 * 键为 注释的源代码的文件路径  值为 注释的内容
 	 */
-	private void readContentToMap(){
+	private void readContentToMap(File file){
 		this.comments = new TreeMap<String, String>();
-			
 		try {
-			File file = FileUtil.readableFile(this.txtCommentFilePath+"\\CLASSIFICATION_"+LxrType.getTypeName(lxr_type)+".txt");
+			
 			BufferedReader reader = new BufferedReader(
 					new FileReader(file));
 			String line = "";
@@ -150,15 +200,22 @@ public class TXTCommentAnalyzer {
 			}
 		}
 		int count = fileComments.size();
+		this.txtWriter.write("源代码文件路径: "+filename+"\t"+"包含的注释条数："+count+"\r\n");
+		this.csvWriter.write(filename+","+count+",");
 		for(Map.Entry<String, Integer> entry:candidateCount.entrySet()){
 			/*
 			 * 这里模板出现的下限次数设为2意思是如果一个文件总共就两条注释的话，就必去全部出现模板，才识别出来
 			 * 如果有多于两条注释，那么至少在一半的注释中出现
 			 */
 			if(entry.getValue()>=2&&entry.getValue()>=count/2){
-				System.out.println(entry.getKey());
+				String c = entry.getKey();
+//				System.out.println(c);
+				this.txtWriter.write(c+"\r\n");
+				this.csvWriter.write(c+",");
 			}
 		}
+		this.txtWriter.write("###################\r\n\r\n");
+		this.csvWriter.write("\r\n");
 	}
 	
 	/**
@@ -196,19 +253,19 @@ public class TXTCommentAnalyzer {
 		return line;
 	}
 	
-	public static void main(String[] args) {
-		TXTCommentAnalyzer a = new TXTCommentAnalyzer(LxrType.function_definition);
+	public static void main(String[] args) throws IOException{
+//		File file = FileUtil.readableFile("D:\\research_gxw\\1_4comment\\data\\filteredComment.txt");
+//		TXTCommentAnalyzer a = new TXTCommentAnalyzer(file);
+		TXTCommentAnalyzer a = new TXTCommentAnalyzer(LxrType.variable_definition);
 		System.out.println(a.getCommentsNumber());
 		System.out.println(a.getFileNumber());
 		
-		for(String file:a.fileset){
-			System.out.println(file+":"+a.getFileComments(file).size());
-			System.out.println("########################");
-			a.extractTemplate(file);
-//			for(String c:a.getFileComments(file)){
-//				System.out.println(c);
-//			}
+		for(String f:a.fileset){
+//			System.out.println(file+":"+a.getFileComments(file).size());
+//			System.out.println("########################");
+			a.extractTemplate(f);
 		}
+		a.closeWriter();
 	}
 	
 }
