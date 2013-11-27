@@ -13,7 +13,7 @@ import java.util.regex.Pattern;
  */
 public class TemplateCandidateFilter{
 //	private String regex = "^(.*[\\pP|a-zA-Z|\\s|0-9])(.*)$";
-	private String regex = "[a-zA-Z|\\s|0-9|\\pP]*([^\\pP\\s0-9]+)[:|£º]";
+	private String regex = "[a-zA-Z|\\s|0-9|\\pP]*([^\\pP\\s0-9]+)(\\s)*[:|£º]";
 
 	public List<String> getText(String inputStr) {
 		List<String> cands = new ArrayList<String>();

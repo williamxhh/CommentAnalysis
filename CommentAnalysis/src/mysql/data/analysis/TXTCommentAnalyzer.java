@@ -66,6 +66,7 @@ public class TXTCommentAnalyzer {
 		this(file,DEFAULTSPLITER);
 	}
 	
+	//处理未分类的文件
 	public TXTCommentAnalyzer(File file,String spliter){
 		this.lxr_type = -1;
 		this.txtCommentFilePath="";
@@ -85,10 +86,12 @@ public class TXTCommentAnalyzer {
 	
 	public void closeWriter(){
 		if(this.txtWriter!=null){
+			this.txtWriter.flush();
 			this.txtWriter.close();
 			this.txtWriter=null;
 		}
 		if(this.csvWriter!=null){
+			this.csvWriter.flush();
 			this.csvWriter.close();
 			this.csvWriter=null;
 		}
@@ -100,7 +103,6 @@ public class TXTCommentAnalyzer {
 	private void readContentToMap(File file){
 		this.comments = new TreeMap<String, String>();
 		try {
-			
 			BufferedReader reader = new BufferedReader(
 					new FileReader(file));
 			String line = "";
@@ -183,7 +185,7 @@ public class TXTCommentAnalyzer {
 	 * 如果候选集中的字符串出现的次数超过了该源代码文件总注释条数的一半，则输出
 	 * @param filename  传入的linux源代码的文件名
 	 */
-	public void extractTemplate(String filename){
+	public void extractTemplate(String filename,boolean outputToFile){
 		//先拿到该文件的所有注释
 		List<String> fileComments = this.getFileComments(filename);
 		Map<String,Integer> candidateCount = new HashMap<String, Integer>();
@@ -199,20 +201,55 @@ public class TXTCommentAnalyzer {
 				}
 			}
 		}
+		Set<String> templates = new HashSet<String>();
 		int count = fileComments.size();
-		this.txtWriter.write("源代码文件路径: "+filename+"\t"+"包含的注释条数："+count+"\r\n");
-		this.csvWriter.write(filename+","+count+",");
 		for(Map.Entry<String, Integer> entry:candidateCount.entrySet()){
 			/*
 			 * 这里模板出现的下限次数设为2意思是如果一个文件总共就两条注释的话，就必去全部出现模板，才识别出来
 			 * 如果有多于两条注释，那么至少在一半的注释中出现
 			 */
 			if(entry.getValue()>=2&&entry.getValue()>=count/2){
-				String c = entry.getKey();
-//				System.out.println(c);
-				this.txtWriter.write(c+"\r\n");
-				this.csvWriter.write(c+",");
+				templates.add(entry.getKey());
 			}
+		}
+		if(outputToFile){
+			outputTemplateToFile(filename, count, templates);
+		}
+		if(templates.size()!=0){
+			System.out.println();
+			System.out.println(filename+":"+templates);
+			for(String comment:fileComments){
+				removeTemplateFromComment(comment, templates);
+			}
+		}
+	}
+	
+	private void removeTemplateFromComment(String comment,Set<String> templates){
+		comment = comment.trim();
+		System.out.println("******************************************");
+		System.out.println("##原始注释为：");
+		System.out.println(comment);
+		System.out.println(templates);
+		for(String template:templates){
+			comment = comment.replaceAll("[[\\s|\\pP]&&[^\\n]]*"+template+"(\\s)*[:|：]", "");
+		}
+		System.out.println("##清洗以后的注释为：");
+		System.out.println(comment);
+	}
+
+	/**
+	 *  * 将抽取出的注释模板输出到文件
+	 * @param filename   源代码文件路径
+	 * @param count   包含的注释条数
+	 * @param templates  抽取出来的模板
+	 */
+	private void outputTemplateToFile(String filename,int count, Set<String> templates) {
+		
+		this.txtWriter.write("源代码文件路径: "+filename+"\t"+"包含的注释条数："+count+"\r\n");
+		this.csvWriter.write(filename+","+count+",");
+		for(String c:templates){
+			this.txtWriter.write(c+"\r\n");
+			this.csvWriter.write(c+",");
 		}
 		this.txtWriter.write("###################\r\n\r\n");
 		this.csvWriter.write("\r\n");
@@ -263,7 +300,7 @@ public class TXTCommentAnalyzer {
 		for(String f:a.fileset){
 //			System.out.println(file+":"+a.getFileComments(file).size());
 //			System.out.println("########################");
-			a.extractTemplate(f);
+			a.extractTemplate(f,false);
 		}
 		a.closeWriter();
 	}

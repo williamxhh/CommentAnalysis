@@ -33,6 +33,7 @@ public class DataClean {
 			while((line= reader.readLine())!=null){
 				//每条注释都用##**##开头，所以一行不是以##**##开头的话，那就表示它与前一行同属于一条注释，所以直接在comment里面追加即可
 				if(!line.startsWith("##**##")){
+					//这里把完全空白的行也过滤掉了
 					if(line.trim().length()!=0)
 						comment.append(line+"\r\n");
 				}else{
