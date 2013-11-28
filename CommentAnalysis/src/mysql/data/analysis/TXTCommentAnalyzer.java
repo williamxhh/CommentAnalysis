@@ -5,7 +5,6 @@ import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.ObjectInputStream.GetField;
 import java.io.PrintWriter;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,19 +14,36 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
 import mysql.data.filter.TemplateCandidateFilter;
 import mysql.data.util.FileUtil;
 import mysql.data.util.LxrType;
 
 public class TXTCommentAnalyzer {
-	private static final String DEFAULTPATH = "D:\\research_gxw\\1_4comment\\data\\CLASSIFIED";
-	private static final String DEFAULTSPLITER = "##**##";
+	public static final String DEFAULTPATH = "D:\\research_gxw\\1_4comment\\data\\CLASSIFIED";
+	public static final String DEFAULTSPLITER = "##**##";
+	private static final Logger log = Logger.getLogger(TXTCommentAnalyzer.class);
+	
+	/**
+	 * 抽取模板策略的严格级别：
+	 * strict策略：如果有多于两条注释，那么至少在一半的注释中出现；如果只有两条注释，那么就必须2条中全部出现      （保证一定的准确率，但是召回率不保证，可能有模板未识别出来）
+	 * middle策略：不论注释条数多少，都只要在一半数目的注释中出现即可（即对一条注释的情况，肯定都识别出来了，对两条注释的情况，只要在一条中出现就识别）  
+	 * loose策略：所有出现在冒号前的情况都识别     （召回率高，但是可能准确率下降，只要用冒号前面的中文汉字，都识别成为模板了。
+	 */
+	private static final int EXTRACTPOLICY_STRICT=1;
+	private static final int EXTRACTPOLICY_MIDDLE=2;
+	private static final int EXTRACTPOLICY_LOOSE=3;
 	
 	private int lxr_type;
 	private String txtCommentFilePath;
 	private String commentSpliter;
 	private PrintWriter txtWriter;
 	private PrintWriter csvWriter;
+	private PrintWriter noTemplateCommentWriter;
+	//此map保存注释文件的模板信息，键为文件名，值为模板构成的集合。注意，这个键是文件名，因为模板是基于文件级别发现的，不是一条注释的注释路径。
+	private Map<String,Set<String>> fileTemplates;
 	
 	
 	//保存注释的内容，键为 注释的源代码的文件路径  值为 注释的内容
@@ -43,10 +59,12 @@ public class TXTCommentAnalyzer {
 		this.lxr_type = type;
 		this.txtCommentFilePath = path;
 		this.commentSpliter = spliter;
+		this.fileTemplates = new HashMap<String,Set<String>>();
 		
 		try {
 			this.txtWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\txt\\"+LxrType.getTypeName(lxr_type)+".txt"));
 			this.csvWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\csv\\"+LxrType.getTypeName(lxr_type)+".csv"));
+			this.noTemplateCommentWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\noTemplate\\"+LxrType.getTypeName(lxr_type)+".txt"));
 		} catch (FileNotFoundException e1) {
 			e1.printStackTrace();
 		} catch (IOException e1) {
@@ -55,7 +73,8 @@ public class TXTCommentAnalyzer {
 		
 		try {
 			File file = FileUtil.readableFile(this.txtCommentFilePath+"\\CLASSIFICATION_"+LxrType.getTypeName(lxr_type)+".txt");
-			readContentToMap(file);
+			this.comments = readContentToMap(file,this.commentSpliter);
+			this.fileset = getAllCommentedFiles(this.comments);
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
@@ -71,11 +90,13 @@ public class TXTCommentAnalyzer {
 		this.lxr_type = -1;
 		this.txtCommentFilePath="";
 		this.commentSpliter = spliter;
-		this.readContentToMap(file);
-		
+		this.comments = readContentToMap(file,this.commentSpliter);
+		this.fileset = getAllCommentedFiles(this.comments);
+		this.fileTemplates = new HashMap<String,Set<String>>();
 		try {
 			this.txtWriter = new PrintWriter(FileUtil.writeableFile(file.getParent()+"\\txt\\allfiltered.txt"));
 			this.csvWriter = new PrintWriter(FileUtil.writeableFile(file.getParent()+"\\csv\\allfiltered.csv"));
+			this.noTemplateCommentWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\noTemplate\\noTemplateComments.txt"));
 		} catch (FileNotFoundException e1) {
 			e1.printStackTrace();
 		} catch (IOException e1) {
@@ -83,7 +104,18 @@ public class TXTCommentAnalyzer {
 		}
 	}
 	
-	
+	public Map<String, Set<String>> getFileTemplates() {
+		return fileTemplates;
+	}
+
+	public Map<String, String> getComments() {
+		return comments;
+	}
+
+	public Set<String> getFileset() {
+		return fileset;
+	}
+
 	public void closeWriter(){
 		if(this.txtWriter!=null){
 			this.txtWriter.flush();
@@ -95,13 +127,18 @@ public class TXTCommentAnalyzer {
 			this.csvWriter.close();
 			this.csvWriter=null;
 		}
+		if(this.noTemplateCommentWriter!=null){
+			this.noTemplateCommentWriter.flush();
+			this.noTemplateCommentWriter.close();
+			this.noTemplateCommentWriter = null;
+		}
 	}
 	/**
 	 * 将制定类型的注释文件的内容全部读入到comments这个map中
 	 * 键为 注释的源代码的文件路径  值为 注释的内容
 	 */
-	private void readContentToMap(File file){
-		this.comments = new TreeMap<String, String>();
+	public Map<String,String> readContentToMap(File file,String commentSpliter){
+		Map<String,String> allComments = new TreeMap<String, String>();
 		try {
 			BufferedReader reader = new BufferedReader(
 					new FileReader(file));
@@ -110,21 +147,21 @@ public class TXTCommentAnalyzer {
 			StringBuilder content = new StringBuilder();
 			while ((line = reader.readLine()) != null) {
 				//如果以特定的分隔符开头，就表示是一条新的注释
-				if(line.startsWith(this.commentSpliter)){
+				if(line.startsWith(commentSpliter)){
 					//如果当前key和content中都有内容，就向map中写入
 					if(!key.equals("")){
-						comments.put(key, content.toString());
+						allComments.put(key, content.toString());
 						key = "";
 						content = new StringBuilder();
 					}
 					// 去掉自定义分隔符##**##
-					key = line.substring(this.commentSpliter.length());
+					key = line.substring(commentSpliter.length());
 				}else{
 					content.append(line+"\n");
 				}
 			}
 			//将最后一条注释放入map
-			comments.put(key, content.toString());
+			allComments.put(key, content.toString());
 			
 			reader.close();
 		} catch (FileNotFoundException e) {
@@ -133,11 +170,16 @@ public class TXTCommentAnalyzer {
 			e.printStackTrace();
 		}
 		
-		fileset = new HashSet<String>();
-		for (Map.Entry<String, String> entry : this.comments.entrySet()) {
+		return allComments;
+	}
+	
+	public Set<String> getAllCommentedFiles(Map<String,String> allComments){
+		Set<String> fileset = new HashSet<String>();
+		for (Map.Entry<String, String> entry : allComments.entrySet()) {
 			String key = entry.getKey();
 			fileset.add(getCommentFileName(key));
 		}
+		return fileset;
 	}
 	
 	/**
@@ -172,20 +214,26 @@ public class TXTCommentAnalyzer {
 		if(fileset.contains(filename)){
 			for (Map.Entry<String, String> entry : this.comments.entrySet()) {
 				if(entry.getKey().startsWith(filename)){
-					c.add(entry.getValue());
+					c.add(entry.getValue().trim());
 				}
 			}
 		}
 		return c;
 	}
 	
+	public void extractTemplate(String filename,boolean outputTemplate){
+		extractTemplate(filename, outputTemplate,TXTCommentAnalyzer.EXTRACTPOLICY_STRICT);
+	}
+	
+	
 	/**
 	 * 识别当前类别的注释下，传入的linux源代码的文件名的所有注释中，是否有模板存在，提取出模板
 	 * 现在的模板提取策略是先对每条注释逐行处理，先用“：”分隔，识别每个“：”前面的中文汉字为候选集
 	 * 如果候选集中的字符串出现的次数超过了该源代码文件总注释条数的一半，则输出
 	 * @param filename  传入的linux源代码的文件名
+	 * @param outputTemplate 是否将模板信息输出到文件
 	 */
-	public void extractTemplate(String filename,boolean outputToFile){
+	public void extractTemplate(String filename,boolean outputTemplate,int extractPolicy){
 		//先拿到该文件的所有注释
 		List<String> fileComments = this.getFileComments(filename);
 		Map<String,Integer> candidateCount = new HashMap<String, Integer>();
@@ -204,37 +252,42 @@ public class TXTCommentAnalyzer {
 		Set<String> templates = new HashSet<String>();
 		int count = fileComments.size();
 		for(Map.Entry<String, Integer> entry:candidateCount.entrySet()){
-			/*
-			 * 这里模板出现的下限次数设为2意思是如果一个文件总共就两条注释的话，就必去全部出现模板，才识别出来
-			 * 如果有多于两条注释，那么至少在一半的注释中出现
-			 */
-			if(entry.getValue()>=2&&entry.getValue()>=count/2){
+			if(extractPolicy==TXTCommentAnalyzer.EXTRACTPOLICY_STRICT){
+				if(entry.getValue()>=2&&entry.getValue()>=count/2){
+					templates.add(entry.getKey());
+				}
+			}else if(extractPolicy==TXTCommentAnalyzer.EXTRACTPOLICY_MIDDLE){
+				if(entry.getValue()>=count/2){
+					templates.add(entry.getKey());
+				}
+			}else if(extractPolicy==TXTCommentAnalyzer.EXTRACTPOLICY_LOOSE){
 				templates.add(entry.getKey());
 			}
 		}
-		if(outputToFile){
+		if(outputTemplate){
 			outputTemplateToFile(filename, count, templates);
 		}
 		if(templates.size()!=0){
-			System.out.println();
-			System.out.println(filename+":"+templates);
+			this.fileTemplates.put(filename, templates);
+			log.info(filename+":"+templates);
 			for(String comment:fileComments){
-				removeTemplateFromComment(comment, templates);
+				log.info("******************************************");
+				log.info("##原始注释为：");
+				log.info(comment);
+				log.info(templates);
+				
+				log.info("##清洗以后的注释为：");
+				log.info(removeTemplateFromComment(comment, templates));
 			}
 		}
 	}
 	
-	private void removeTemplateFromComment(String comment,Set<String> templates){
+	private String removeTemplateFromComment(String comment,Set<String> templates){
 		comment = comment.trim();
-		System.out.println("******************************************");
-		System.out.println("##原始注释为：");
-		System.out.println(comment);
-		System.out.println(templates);
 		for(String template:templates){
-			comment = comment.replaceAll("[[\\s|\\pP]&&[^\\n]]*"+template+"(\\s)*[:|：]", "");
+			comment = comment.replaceAll("n?[[\\s|\\pP]&&[^\\n]]*"+template+"(\\s)*[:|：]", "");
 		}
-		System.out.println("##清洗以后的注释为：");
-		System.out.println(comment);
+		return comment;
 	}
 
 	/**
@@ -256,6 +309,7 @@ public class TXTCommentAnalyzer {
 	}
 	
 	/**
+	 * 对每条注释逐行处理，抽取出候选集
 	 * 因为一条comment可能包含多行，此函数将comment逐行处理，每一行再判断用：分隔以后的结果，最后用set保存结果，以保证在一条注释内的高频词，不会重复统计
 	 * @param comment
 	 * @return
@@ -283,26 +337,59 @@ public class TXTCommentAnalyzer {
 	 * @param line   一个title描述，如   /virt/kvm/kvm_main.c/kvm_set_pfn_dirty(1258)(linux-3.5.4)
 	 * @return     源代码文件名  如 /virt/kvm/kvm_main.c
 	 */
-	private String getCommentFileName(String line){
+	public String getCommentFileName(String line){
 		if(this.lxr_type!=LxrType.file){
 			return line.substring(0, line.lastIndexOf("/"));
 		}
 		return line;
 	}
 	
+	/**
+	 * 将注释信息过滤模板以后，输出到文件
+	 * @param allComments   所有的注释内容构成的map，键为注释路径，值为注释内容
+	 * @param fileTemplates    所有的模板构成的map，键为源代码文件名，值为模板集合
+	 * @param writer    输出用的writer
+	 * @param commentSpliter   每条注释前跟的自定义的分隔符 
+	 */
+	public void outputNoTemplateCommentToFile(Map<String,String> allComments,Map<String,Set<String>> fileTemplates,PrintWriter writer,String commentSpliter){
+		for(Map.Entry<String, String> entry:allComments.entrySet()){
+			//先根据被注释的路径名获取被注释的文件名
+			String fileName = getCommentFileName(entry.getKey());
+			writer.write(commentSpliter+entry.getKey().trim()+"\r\n");
+			//如果文件模板中，当前文件存在模板，就对当前注释过滤模板以后输出，否则就对注释进行原样输出
+			if(fileTemplates.containsKey(fileName)){
+				writer.write(removeTemplateFromComment(entry.getValue(), fileTemplates.get(fileName)).trim()+"\r\n");
+			}else{
+				writer.write(entry.getValue().trim()+"\r\n");
+			}
+			writer.write("\r\n");
+		}
+	}
+	
+	
 	public static void main(String[] args) throws IOException{
 //		File file = FileUtil.readableFile("D:\\research_gxw\\1_4comment\\data\\filteredComment.txt");
 //		TXTCommentAnalyzer a = new TXTCommentAnalyzer(file);
-		TXTCommentAnalyzer a = new TXTCommentAnalyzer(LxrType.variable_definition);
-		System.out.println(a.getCommentsNumber());
-		System.out.println(a.getFileNumber());
-		
-		for(String f:a.fileset){
-//			System.out.println(file+":"+a.getFileComments(file).size());
-//			System.out.println("########################");
-			a.extractTemplate(f,false);
+		log.setLevel(Level.WARN);
+		for(int lxrtype : LxrType.getTypeValues()){
+			TXTCommentAnalyzer a = new TXTCommentAnalyzer(lxrtype);
+			//		System.out.println(a.getCommentsNumber());
+			//		System.out.println(a.getFileNumber());
+
+			boolean outputTemplate = false;
+			boolean outputNoTemplateComments = true;
+			for(String f:a.fileset){
+				//			System.out.println(file+":"+a.getFileComments(file).size());
+				//			System.out.println("########################");
+				a.extractTemplate(f,outputTemplate,TXTCommentAnalyzer.EXTRACTPOLICY_STRICT);
+			}
+			if(outputNoTemplateComments){
+				a.outputNoTemplateCommentToFile(a.comments, a.fileTemplates, a.noTemplateCommentWriter, a.commentSpliter);
+			}
+
+			a.closeWriter();
 		}
-		a.closeWriter();
+		System.out.println("done");
 	}
 	
 }

@@ -17,20 +17,65 @@ public class LxrType {
 	public static final int union_name = 10;
 	public static final int variable_definition = 11;	
 	
+	private static List<String> typeNames = new ArrayList<String>();
+	private static List<Integer> typeValues = new ArrayList<Integer>();
+	
 	public static String getTypeName(int type){
-		List<String> typenames = new ArrayList<String>();
-		typenames.add("class, struct, or union member");
-		typenames.add("enumeration name");
-		typenames.add("enumerator");
-		typenames.add("extern or forward variable declaration");
-		typenames.add("file");
-		typenames.add("function definition");
-		typenames.add( "function prototype or declaration");
-		typenames.add("macro (un)definition");
-		typenames.add("structure name");
-		typenames.add("typedef");
-		typenames.add("union name");
-		typenames.add("variable definition");
-		return typenames.get(type);
+		if(typeNames.size()==0){
+			fillTypeList();
+		}
+		return typeNames.get(type);
+	}
+	
+	public static List<String> getTypeList(){
+		if(typeNames.size()==0){
+			fillTypeList();
+		}
+		return typeNames;
+	}
+	
+	public static List<Integer> getTypeValues(){
+		if(typeValues.size()==0){
+			fillTypeList();
+		}
+		return typeValues;
+	}
+	
+	private static void fillTypeList(){
+		typeNames.add("class, struct, or union member");
+		typeValues.add(LxrType.class_struct_or_union_member);
+		
+		typeNames.add("enumeration name");
+		typeValues.add(LxrType.enumeration_name);
+		
+		typeNames.add("enumerator");
+		typeValues.add(LxrType.enumerator);
+		
+		typeNames.add("extern or forward variable declaration");
+		typeValues.add(LxrType.extern_or_forward_variable_declaration);
+		
+		typeNames.add("file");
+		typeValues.add(LxrType.file);
+		
+		typeNames.add("function definition");
+		typeValues.add(LxrType.function_definition);
+		
+		typeNames.add( "function prototype or declaration");
+		typeValues.add(LxrType.function_prototype_or_declaration);
+		
+		typeNames.add("macro (un)definition");
+		typeValues.add(LxrType.macro_un_definition);
+		
+		typeNames.add("structure name");
+		typeValues.add(LxrType.structure_name);
+		
+		typeNames.add("typedef");
+		typeValues.add(LxrType.typedef);
+		
+		typeNames.add("union name");
+		typeValues.add(LxrType.union_name);
+		
+		typeNames.add("variable definition");
+		typeValues.add(LxrType.variable_definition);
 	}
 }
