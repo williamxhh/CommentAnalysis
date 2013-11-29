@@ -370,14 +370,14 @@ public class TXTCommentAnalyzer {
 	public static void main(String[] args) throws IOException{
 //		File file = FileUtil.readableFile("D:\\research_gxw\\1_4comment\\data\\filteredComment.txt");
 //		TXTCommentAnalyzer a = new TXTCommentAnalyzer(file);
-		log.setLevel(Level.WARN);
+		log.setLevel(Level.INFO);
 		for(int lxrtype : LxrType.getTypeValues()){
 			TXTCommentAnalyzer a = new TXTCommentAnalyzer(lxrtype);
 			//		System.out.println(a.getCommentsNumber());
 			//		System.out.println(a.getFileNumber());
 
 			boolean outputTemplate = false;
-			boolean outputNoTemplateComments = true;
+			boolean outputNoTemplateComments = false;
 			for(String f:a.fileset){
 				//			System.out.println(file+":"+a.getFileComments(file).size());
 				//			System.out.println("########################");

@@ -43,8 +43,9 @@ public class CommentStatistics {
 	
 	public static void outputStatResult(int lxrtype,Map<String,String> comments,Map<String,String> noTemplateStrictComments,Map<String,String> noTemplateMiddleComments,Map<String,String> noTemplateLooseComments){
 		try {
-			PrintWriter writer = new PrintWriter(FileUtil.writeableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\statistic\\"+LxrType.getTypeName(lxrtype)+".csv"));
-			writer.write("注释路径,注释长度,中文字符数,过滤strict型模板后长度,strict中文字符数,过滤middle型模板后长度,middle中文字符数,过滤loose型模板后长度,loose中文字符数\r\n");
+			PrintWriter writer = new PrintWriter(FileUtil.writeableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\statistic\\"+lxrtype+".csv"));
+			PrintWriter matlab_writer = new PrintWriter(FileUtil.writeableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\statistic\\m"+lxrtype+".csv"));
+			writer.write("注释路径,注释长度,中文字符数,过滤strict型模板后长度,strict中文字符数,strict型模板长度,过滤middle型模板后长度,middle中文字符数,middle型模板长度,过滤loose型模板后长度,loose中文字符数,loose型模板长度\r\n");
 			for(Map.Entry<String,String> entry:comments.entrySet()){
 				String commentContent = entry.getValue().trim();
 				String chinesePart = commentContent.replaceAll("[a-zA-Z]+[\\s\\pP<>]*", "");
@@ -54,9 +55,11 @@ public class CommentStatistics {
 				String chineseMiddle = middle.replaceAll("[a-zA-Z]+[\\s\\pP<>]*", "");
 				String loose = noTemplateLooseComments.get(entry.getKey()).trim();
 				String chineseLoose = loose.replaceAll("[a-zA-Z]+[\\s\\pP<>]*", "");
-				writer.write(entry.getKey()+","+commentContent.length()+","+chinesePart.length()+","+strict.length()+","+chineseStrict.length()+","+middle.length()+","+chineseMiddle.length()+","+loose.length()+","+chineseLoose.length()+"\r\n");
+				writer.write(entry.getKey()+","+commentContent.length()+","+chinesePart.length()+","+strict.length()+","+chineseStrict.length()+","+(commentContent.length()-strict.length())+","+middle.length()+","+chineseMiddle.length()+","+(commentContent.length()-middle.length())+","+loose.length()+","+chineseLoose.length()+","+(commentContent.length()-loose.length())+"\r\n");
+				matlab_writer.write(commentContent.length()+","+chinesePart.length()+","+strict.length()+","+chineseStrict.length()+","+(commentContent.length()-strict.length())+","+middle.length()+","+chineseMiddle.length()+","+(commentContent.length()-middle.length())+","+loose.length()+","+chineseLoose.length()+","+(commentContent.length()-loose.length())+"\r\n");
 			}
 			writer.close();
+			matlab_writer.close();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
