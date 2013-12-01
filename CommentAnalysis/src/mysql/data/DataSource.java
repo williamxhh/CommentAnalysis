@@ -6,6 +6,7 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.nio.charset.Charset;
 import java.sql.Blob;
@@ -14,45 +15,91 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.Properties;
+
+import mysql.data.util.FileUtil;
+import mysql.data.util.PropertiesUtil;
 
 public class DataSource {
-	static final String ROOTPATH = "D:/research_gxw/1_4comment/data/";
+	private Properties props = new Properties();
+	private Connection conn;
+	private String rootPath;
 
 	public static void main(String[] args) {
 		try {
-			Class.forName("com.mysql.jdbc.Driver");
-
-			String url = "jdbc:mysql://192.168.160.131:3306/pku_comment?user=root&password=123123";
-			Connection conn = DriverManager.getConnection(url);
-			Statement stmt = conn.createStatement();
-
-//			getModules(stmt);
-//			loadData(stmt);
-//			loadAllCommentInOneFile(stmt);
-			
-			stmt.close();
-			conn.close();
+			DataSource ds = new DataSource();
+			ds.loadCommentToFile();
+			ds.closeDBConnection();
 			System.out.println("done");
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
 
 	}
 	
+	public DataSource(){
+		props = PropertiesUtil.getProperties();
+		StringBuilder url = new StringBuilder();
+		url.append("jdbc:mysql://")
+			.append(props.getProperty("mysql.data.DataSource.dbserver.ip","192.168.160.131"))
+			.append(":")
+			.append(props.getProperty("mysql.data.DataSource.dbserver.port","3306"))
+			.append("/")
+			.append(props.getProperty("mysql.data.DataSource.commentdb","pku_comment"))
+			.append("?user=")
+			.append(props.getProperty("mysql.data.DataSource.dbserver.user","root"))
+			.append("&password=")
+			.append(props.getProperty("mysql.data.DataSource.dbserver.pass","123123"));
+		
+		try {
+			Class.forName("com.mysql.jdbc.Driver");
+			this.conn = DriverManager.getConnection(url.toString());
+			
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
+		
+	}
+	
+	public Connection getConn() {
+		return conn;
+	}
+
+	public void closeDBConnection(){
+		try {
+			if(this.conn!=null&&this.conn.isClosed()){
+				conn.close();
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void loadCommentToFile() throws SQLException{
+		File allModulePath = new File("path.txt");
+		if(!allModulePath.exists()){
+			getModules();
+		}
+//		loadData();
+		loadAllCommentInOneFile();
+	}
 	
 	/**
 	 * 将数据库中的源代码注释取出,存入到一个文件allComments.txt中
-	 * @param stmt
+	 * @throws SQLException 
 	 */
-	static void loadAllCommentInOneFile(Statement stmt){
+	private void loadAllCommentInOneFile() throws SQLException{
+		Statement stmt = conn.createStatement();
 		PrintWriter writer = null;
 		try {
 			BufferedReader reader = new BufferedReader(new FileReader("path.txt"));
 			String line = "";
 			
-			File file = new File(ROOTPATH+"/allComments.txt");
+			File file = new File(rootPath+"/allComments.txt");
 			File parent = file.getParentFile();
 			if(parent!=null&&!parent.exists()){
 				parent.mkdirs();
@@ -61,11 +108,12 @@ public class DataSource {
 			
 			writer = new PrintWriter(file);
 			while((line = reader.readLine())!=null){
-				writer.write("##**##"+line+"<br/><br/>\r\n\r\n"+getComment(stmt, line)+"<br/><br/>\r\n\r\n");
+				writer.write("##**##"+line+"\r\n\r\n"+getComment(stmt, line)+"\r\n\r\n");
 			}
 			writer.flush();
 			writer.close();
 			reader.close();
+			stmt.close();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -76,14 +124,16 @@ public class DataSource {
 	/**
 	 * 将数据库中的源代码注释取出，按照源代码的路径放到相应的文件中
 	 * @param stmt
+	 * @throws SQLException 
 	 */
-	static void loadData(Statement stmt){
+	private void loadData() throws SQLException{
+		Statement stmt = conn.createStatement();
 		PrintWriter writer = null;
 		try {
 			BufferedReader reader = new BufferedReader(new FileReader("path.txt"));
 			String line = "";
 			while((line = reader.readLine())!=null){
-				File file = new File(ROOTPATH+line+".txt");
+				File file = new File(rootPath+line+".txt");
 				File parent = file.getParentFile();
 				if(parent!=null&&!parent.exists()){
 					parent.mkdirs();
@@ -96,6 +146,7 @@ public class DataSource {
 			}
 			writer.close();
 			reader.close();
+			stmt.close();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		} catch (IOException e) {
@@ -106,9 +157,10 @@ public class DataSource {
 	/**
 	 * 得到所有已有analyst写的文件和标识符注释 的 源代码路径，写入到文件path中
 	 * 文件和标识符注释内容的page_namespace=0。而模块注释的page_namespace=14
-	 * @param stmt
+	 * @throws SQLException 
 	 */
-	static void getModules(Statement stmt) {
+	private void getModules() throws SQLException {
+		Statement stmt = conn.createStatement();
 		ResultSet rs;
 		try {
 			rs = stmt
@@ -119,7 +171,8 @@ public class DataSource {
 			PrintWriter writer = new PrintWriter(new FileWriter("path.txt"));
 
 			while (rs.next()) {
-				writer.print(rs.getString(1) + "\r\n");
+				if(rs.getString(1).startsWith("/"))
+					writer.print(rs.getString(1) + "\r\n");
 			}
 			writer.flush();
 
@@ -136,11 +189,11 @@ public class DataSource {
 	
 	/**
 	 * 获取指定 源代码路径的注释内容
-	 * @param stmt
 	 * @param pageTitle   要获取注释内容的源代码路径
 	 * @return
+	 * @throws SQLException 
 	 */
-	static String getComment(Statement stmt,String pageTitle) {
+	private String getComment(Statement stmt,String pageTitle) throws SQLException {
 		StringBuilder sb = new StringBuilder();
 		try {
 			ResultSet rs = stmt

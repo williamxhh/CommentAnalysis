@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.sql.Connection;
@@ -13,56 +14,146 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
 
 import mysql.data.util.FileUtil;
+import mysql.data.util.PropertiesUtil;
 
 public class CommentClassifier {
+	private Properties props;
+	private Connection conn;
+	private String rootPath;
+	
 	// 这个map是分类的时候用，有多少种注释种类，就用type名作为键，建立不同的writer，往不同的文件里面写
 	static Map<String,PrintWriter> WRITERMAP = new HashMap<String, PrintWriter>(); 
-	//这个Set是在不知道要处理的注释有多少种type的时候，做统计用的，因为set不会保存重复的类型
-	//static Set<String> TYPESET = new HashSet<String>(); 
+	static String COMMENTSANDTYPES = "CommentsAndTypes.txt";
+
 	
-	public static void main(String[] args) {
+	public CommentClassifier(){
+		props = PropertiesUtil.getProperties();
+		StringBuilder url = new StringBuilder();
+		url.append("jdbc:mysql://")
+			.append(props.getProperty("mysql.data.DataSource.dbserver.ip","192.168.160.131"))
+			.append(":")
+			.append(props.getProperty("mysql.data.DataSource.dbserver.port","3306"))
+			.append("/")
+			.append(props.getProperty("mysql.data.CommentClassifier.lxrdb","lxr"))
+			.append("?user=")
+			.append(props.getProperty("mysql.data.DataSource.dbserver.user","root"))
+			.append("&password=")
+			.append(props.getProperty("mysql.data.DataSource.dbserver.pass","123123"));
 		
 		try {
-			classifyComment();
-//			for(String s:TYPESET){
-//				System.out.println(s);
-//			}
-//			System.out.println(TYPESET.size());
-			System.out.println("done");
+			Class.forName("com.mysql.jdbc.Driver");
+			this.conn = DriverManager.getConnection(url.toString());
+			
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+		this.rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
+	}
+	
+	public Connection getConn() {
+		return conn;
+	}
+
+	public void closeDBConnection(){
+		try {
+			if(this.conn!=null&&this.conn.isClosed()){
+				conn.close();
+			}
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	public void getAllCommentedTypes(){
+		try {
+			BufferedReader reader = new BufferedReader(new FileReader("path.txt"));
+			PrintWriter writer = new PrintWriter(new FileWriter(COMMENTSANDTYPES));
+			String line ="";
+			while((line=reader.readLine())!=null){
+				writer.write(line+","+getType(line)+"\r\n");
+			}
+			reader.close();
+			writer.flush();
+			writer.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		} catch (IOException e) {
+			e.printStackTrace();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	@SuppressWarnings("resource")
+	public void classifyComment() throws IOException{
+		File typeFile = new File(COMMENTSANDTYPES);
+		if(!typeFile.exists()){
+			getAllCommentedTypes();
+		}
+		BufferedReader typereader = new BufferedReader(new FileReader(typeFile));
+		Map<String, String> commentTypeMap = new HashMap<String,String>();
+		Set<String> typeset = new HashSet<String>();
+		String oneline = "";
+		while((oneline=typereader.readLine())!=null){
+			String[] str = oneline.split(",");
+			commentTypeMap.put(str[0], str[1]);
+			typeset.add(str[1]);
+		}
+		typereader.close();
+
+		prepareWriter(typeset);
+
+		//通过不断读取保存一条注释内容，读满一条就写出
+		StringBuilder comment = new StringBuilder();
+		BufferedReader reader = new BufferedReader(
+				new FileReader(rootPath+"/filteredComment.txt"));
+
+		//先把首行读出来，判断一个类别，初始化好 currentWriter
+		String line = reader.readLine();
+		comment.append(line+"\r\n");
+		//去掉前面的 ##**## 再处理 ，获取相应的type值，拿到对应的writer
+		PrintWriter currentWriter = WRITERMAP.get(commentTypeMap.get(line.substring(6)));
+
+		while ((line = reader.readLine()) != null) {
+			//每条注释都用##**##开头，所以一行不是以##**##开头的话，那就表示它与前一行同属于一条注释，所以直接在comment里面追加即可
+			if(!line.startsWith("##**##")){
+				if(line.trim().length()!=0)
+					comment.append(line+"\r\n");
+			}else{
+				//如果当前这条注释已经完成，那么就输出保存，然后重置comment，开始保存下一条注释
+				currentWriter.write(comment.toString()+"\r\n");
+				currentWriter.flush();
+				currentWriter = WRITERMAP.get(commentTypeMap.get(line.substring(6)));
+				comment = new StringBuilder();
+				comment.append(line+"\r\n");
+			}
+		}
+		reader.close();
+		currentWriter.write(comment.toString()+"\r\n");
+		currentWriter.flush();
+
+		//释放所有的writer资源
+		closeWriter();
 	}
 	
 	
 	/**
 	 * 将不同类别的writer初始化
 	 */
-	static void prepareWriter(){
-		List<String> typeList = new ArrayList<String>();
-		typeList.add("enumeration name");
-		typeList.add("variable definition");
-		typeList.add("extern or forward variable declaration");
-		typeList.add("file");
-		typeList.add("enumerator");
-		typeList.add("macro (un)definition");
-		typeList.add("union name");
-		typeList.add("class, struct, or union member");
-		typeList.add("function definition");
-		typeList.add("function prototype or declaration");
-		typeList.add("structure name");
-		typeList.add("typedef");
+	private void prepareWriter(Set<String> typeset){
 		
-		//注释里面有两条android的测试注释，为了程序健壮性，特加上这个分类，这实际上不是一个有实际意义的分类
-		typeList.add("exception_android");
-		
-		for(String s:typeList){
+		for(String s:typeset){
 			try {
-				File file = FileUtil.writeableFile(DataSource.ROOTPATH+"CLASSIFIED/CLASSIFICATION_"+s+".txt");
+				File file = FileUtil.writeableFile(rootPath+"CLASSIFIED/CLASSIFICATION_"+s+".txt");
 				WRITERMAP.put(s, new PrintWriter(file));
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
@@ -75,62 +166,14 @@ public class CommentClassifier {
 	/**
 	 * 释放所有的writer资源
 	 */
-	static void closeWriter(){
+	private void closeWriter(){
 		for(Map.Entry<String, PrintWriter> entry:WRITERMAP.entrySet()){
 			entry.getValue().flush();
 			entry.getValue().close();
 		}
 	}
-
 	
-	/**
-	 * 从过滤处理以后的注释文件filteredComment.txt中读取，然后判断被注释对象的类别，将不同类的注释保存到不同的文件中
-	 * @throws SQLException
-	 */
-	@SuppressWarnings("resource")
-	static void classifyComment() throws SQLException{
-		//将不同类别的writer初始化
-		prepareWriter();
-		
-		//通过不断读取保存一条注释内容，读满一条就写出
-		StringBuilder comment = new StringBuilder();
-		try {
-			BufferedReader reader = new BufferedReader(
-					new FileReader(DataSource.ROOTPATH+"/filteredComment.txt"));
-			
-			//先把首行读出来，判断一个类别，初始化好 currentWriter
-			String line = reader.readLine();
-			comment.append(line+"\r\n");
-			//去掉前面的 ##**## 再处理 ，获取相应的type值，拿到对应的writer
-			PrintWriter currentWriter = WRITERMAP.get(getType(line.substring(6)));
-			
-			while ((line = reader.readLine()) != null) {
-				//每条注释都用##**##开头，所以一行不是以##**##开头的话，那就表示它与前一行同属于一条注释，所以直接在comment里面追加即可
-				if(!line.startsWith("##**##")){
-					if(line.trim().length()!=0)
-						comment.append(line+"\r\n");
-				}else{
-				//如果当前这条注释已经完成，那么就输出保存，然后重置comment，开始保存下一条注释
-					currentWriter.write(comment.toString()+"\r\n");
-					currentWriter.flush();
-					currentWriter = WRITERMAP.get(getType(line.substring(6)));
-					comment = new StringBuilder();
-					comment.append(line+"\r\n");
-				}
-			}
-			reader.close();
-			currentWriter.write(comment.toString()+"\r\n");
-			currentWriter.flush();
-
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		
-		//释放所有的writer资源
-		closeWriter();
-	}
+	
 	
 	/**
 	 * 基于一个注释的标题，抽取其中的文件名，变量名，行号等信息，进而查出接下来的注释的类型
@@ -140,8 +183,7 @@ public class CommentClassifier {
 	 * @return
 	 * @throws SQLException
 	 */
-	static String getType(String line) throws SQLException{
-//		PrintWriter writer = new PrintWriter("Filename_Symbolname_LineNo_Type.txt");
+	public String getType(String line) throws SQLException{
 		String comm_filename = "";
 		String comm_symname = "";
 		int comm_linenoInFile = -1;
@@ -166,15 +208,9 @@ public class CommentClassifier {
 				type = "file";
 			}
 			
-//			TYPESET.add(type);
-//			writer.write(line + "\tFileName:" + comm_filename
-//					+ "\tSymbol Name:" + comm_symname + "\tLineNo:"
-//					+ comm_linenoInFile+"\tType:"+type+"\r\n");
 		}else{
 			type = "exception_android";
 		}
-//		writer.flush();
-//		writer.close();
 		return type;
 	}
 	
@@ -188,7 +224,7 @@ public class CommentClassifier {
 	 * @return
 	 * @throws SQLException
 	 */
-	static String getType(String filename,String symbolname,int lineNo) throws SQLException{
+	public String getType(String filename,String symbolname,int lineNo) throws SQLException{
 		String type = "";
 		String url = "jdbc:mysql://192.168.160.131:3306/lxr?user=root&password=123123";
 		Connection conn = DriverManager.getConnection(url);
@@ -211,5 +247,10 @@ public class CommentClassifier {
 		
 		return type;
 	}
-	
+
+	public static void main(String[] args) throws IOException {
+		CommentClassifier cc = new CommentClassifier();
+		cc.classifyComment();
+		System.out.println("done");
+	}
 }

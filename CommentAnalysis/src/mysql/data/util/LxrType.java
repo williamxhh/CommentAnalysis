@@ -27,6 +27,13 @@ public class LxrType {
 		return typeNames.get(type);
 	}
 	
+	public static int getTypeIndex(String type){
+		if(typeNames.size()==0){
+			fillTypeList();
+		}
+		return typeValues.get(typeNames.indexOf(type));
+	}
+	
 	public static List<String> getTypeList(){
 		if(typeNames.size()==0){
 			fillTypeList();

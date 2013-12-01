@@ -4,29 +4,46 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.util.Properties;
 
 import mysql.data.filter.CategoryTagFilter;
 import mysql.data.filter.DoNothingFilter;
 import mysql.data.filter.FilterBase;
 import mysql.data.filter.HtmlFilter;
+import mysql.data.util.PropertiesUtil;
 
 public class DataClean {
+	static Properties props ;
+	
+	
 	public static void main(String[] args) {
+		try {
+			filterComment();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
+		System.out.println("done");
+	}
+	
+	static void filterComment() throws IOException{
 		//将原注释中的html标签，   以及 [[Category:]]     [[File:]]这样的东西处理掉
 		FilterBase filter = new CategoryTagFilter(new HtmlFilter(new DoNothingFilter()));
 		filterComment(filter);
-		System.out.println("done");
 	}
 	
 	/**
 	 * 使用传入的过滤器对原始的注释信息进行过滤，从allComments.txt读入，写出到filteredComment.txt
 	 * @param filter
+	 * @throws IOException 
 	 */
-	static void filterComment(FilterBase filter){
+	static void filterComment(FilterBase filter) throws IOException{
+		props = PropertiesUtil.getProperties();
+		String rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
 		try {
-			BufferedReader reader = new BufferedReader(new FileReader(DataSource.ROOTPATH+"/allComments.txt"));
-			PrintWriter writer = new PrintWriter(DataSource.ROOTPATH+"/filteredComment.txt");
+			BufferedReader reader = new BufferedReader(new FileReader(rootPath+"/allComments.txt"));
+			PrintWriter writer = new PrintWriter(rootPath+"/filteredComment.txt");
 			StringBuilder comment = new StringBuilder();
 			comment.append(reader.readLine()+"\r\n");
 			String line = "";

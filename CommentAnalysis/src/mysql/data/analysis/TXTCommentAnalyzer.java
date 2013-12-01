@@ -22,8 +22,8 @@ import mysql.data.util.FileUtil;
 import mysql.data.util.LxrType;
 
 public class TXTCommentAnalyzer {
-	public static final String DEFAULTPATH = "D:\\research_gxw\\1_4comment\\data\\CLASSIFIED";
-	public static final String DEFAULTSPLITER = "##**##";
+	public static String DEFAULTPATH = "D:\\research_gxw\\1_4comment\\data\\CLASSIFIED";
+	public static String DEFAULTSPLITER = "##**##";
 	private static final Logger log = Logger.getLogger(TXTCommentAnalyzer.class);
 	
 	/**
@@ -52,23 +52,25 @@ public class TXTCommentAnalyzer {
 	private Set<String> fileset;
 	
 	public TXTCommentAnalyzer(int type){
-		this(type,DEFAULTPATH,DEFAULTSPLITER);
+		this(type,DEFAULTPATH,DEFAULTSPLITER,true);
 	}
 
-	public TXTCommentAnalyzer(int type,String path,String spliter){
+	public TXTCommentAnalyzer(int type,String path,String spliter,boolean outputToFile){
 		this.lxr_type = type;
 		this.txtCommentFilePath = path;
 		this.commentSpliter = spliter;
 		this.fileTemplates = new HashMap<String,Set<String>>();
 		
-		try {
-			this.txtWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\txt\\"+LxrType.getTypeName(lxr_type)+".txt"));
-			this.csvWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\csv\\"+LxrType.getTypeName(lxr_type)+".csv"));
-			this.noTemplateCommentWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\noTemplate\\"+LxrType.getTypeName(lxr_type)+".txt"));
-		} catch (FileNotFoundException e1) {
-			e1.printStackTrace();
-		} catch (IOException e1) {
-			e1.printStackTrace();
+		if(outputToFile){
+			try {
+				this.txtWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\txt\\"+LxrType.getTypeName(lxr_type)+".txt"));
+				this.csvWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\csv\\"+LxrType.getTypeName(lxr_type)+".csv"));
+				this.noTemplateCommentWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\noTemplate\\"+LxrType.getTypeName(lxr_type)+".txt"));
+			} catch (FileNotFoundException e1) {
+				e1.printStackTrace();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+			}
 		}
 		
 		try {
