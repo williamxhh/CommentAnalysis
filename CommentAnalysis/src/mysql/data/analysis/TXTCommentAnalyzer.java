@@ -11,6 +11,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -20,28 +21,33 @@ import org.apache.log4j.Logger;
 import mysql.data.filter.TemplateCandidateFilter;
 import mysql.data.util.FileUtil;
 import mysql.data.util.LxrType;
+import mysql.data.util.PropertiesUtil;
 
 public class TXTCommentAnalyzer {
-	public static String DEFAULTPATH = "D:\\research_gxw\\1_4comment\\data\\CLASSIFIED";
-	public static String DEFAULTSPLITER = "##**##";
 	private static final Logger log = Logger.getLogger(TXTCommentAnalyzer.class);
 	
+	private static Properties props = PropertiesUtil.getProperties();
+	static String ROOTPATH = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
+	static String DEFAULTPATH = ROOTPATH+props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.classifiedCommentPath","CLASSIFIED");
+	static String DEFAULTSPLITER = props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter","##**##");;
 	/**
 	 * 抽取模板策略的严格级别：
 	 * strict策略：如果有多于两条注释，那么至少在一半的注释中出现；如果只有两条注释，那么就必须2条中全部出现      （保证一定的准确率，但是召回率不保证，可能有模板未识别出来）
 	 * middle策略：不论注释条数多少，都只要在一半数目的注释中出现即可（即对一条注释的情况，肯定都识别出来了，对两条注释的情况，只要在一条中出现就识别）  
 	 * loose策略：所有出现在冒号前的情况都识别     （召回率高，但是可能准确率下降，只要用冒号前面的中文汉字，都识别成为模板了。
 	 */
-	private static final int EXTRACTPOLICY_STRICT=1;
-	private static final int EXTRACTPOLICY_MIDDLE=2;
-	private static final int EXTRACTPOLICY_LOOSE=3;
+	public static final int EXTRACTPOLICY_STRICT=0;
+	public static final int EXTRACTPOLICY_MIDDLE=1;
+	public static final int EXTRACTPOLICY_LOOSE=2;
+	public static final String[] EXTRACTPOLICY= {"strict","middle","loose"};
 	
-	private int lxr_type;
+	private String lxr_type;
 	private String txtCommentFilePath;
 	private String commentSpliter;
 	private PrintWriter txtWriter;
 	private PrintWriter csvWriter;
 	private PrintWriter noTemplateCommentWriter;
+	private int extractPolicy;
 	//此map保存注释文件的模板信息，键为文件名，值为模板构成的集合。注意，这个键是文件名，因为模板是基于文件级别发现的，不是一条注释的注释路径。
 	private Map<String,Set<String>> fileTemplates;
 	
@@ -51,21 +57,30 @@ public class TXTCommentAnalyzer {
 	//保存当前所选的lxr_type类型的所有注释所涉及的所有 源代码文件名
 	private Set<String> fileset;
 	
-	public TXTCommentAnalyzer(int type){
-		this(type,DEFAULTPATH,DEFAULTSPLITER,true);
+	public TXTCommentAnalyzer(String type){
+		this(type,DEFAULTPATH,DEFAULTSPLITER,true,EXTRACTPOLICY_STRICT);
+	}
+	
+	public TXTCommentAnalyzer(String type,boolean outputToFile){
+		this(type,DEFAULTPATH,DEFAULTSPLITER,outputToFile,EXTRACTPOLICY_STRICT);
+	}
+	
+	public TXTCommentAnalyzer(String type,int extractPolicy){
+		this(type,DEFAULTPATH,DEFAULTSPLITER,true,extractPolicy);
 	}
 
-	public TXTCommentAnalyzer(int type,String path,String spliter,boolean outputToFile){
+	public TXTCommentAnalyzer(String type,String path,String spliter,boolean outputToFile,int extractPolicy){
 		this.lxr_type = type;
 		this.txtCommentFilePath = path;
 		this.commentSpliter = spliter;
 		this.fileTemplates = new HashMap<String,Set<String>>();
+		this.extractPolicy = extractPolicy;
 		
 		if(outputToFile){
 			try {
-				this.txtWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\txt\\"+LxrType.getTypeName(lxr_type)+".txt"));
-				this.csvWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\csv\\"+LxrType.getTypeName(lxr_type)+".csv"));
-				this.noTemplateCommentWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\noTemplate\\"+LxrType.getTypeName(lxr_type)+".txt"));
+				this.txtWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\txt\\"+lxr_type+".txt"));
+				this.csvWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\csv\\"+lxr_type+".csv"));
+				this.noTemplateCommentWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\noTemplate_"+EXTRACTPOLICY[extractPolicy]+"\\"+lxr_type+".txt"));
 			} catch (FileNotFoundException e1) {
 				e1.printStackTrace();
 			} catch (IOException e1) {
@@ -74,7 +89,7 @@ public class TXTCommentAnalyzer {
 		}
 		
 		try {
-			File file = FileUtil.readableFile(this.txtCommentFilePath+"\\CLASSIFICATION_"+LxrType.getTypeName(lxr_type)+".txt");
+			File file = FileUtil.readableFile(this.txtCommentFilePath+"\\CLASSIFICATION_"+lxr_type+".txt");
 			this.comments = readContentToMap(file,this.commentSpliter);
 			this.fileset = getAllCommentedFiles(this.comments);
 		} catch (IOException e) {
@@ -89,7 +104,7 @@ public class TXTCommentAnalyzer {
 	
 	//处理未分类的文件
 	public TXTCommentAnalyzer(File file,String spliter){
-		this.lxr_type = -1;
+		this.lxr_type = "";
 		this.txtCommentFilePath="";
 		this.commentSpliter = spliter;
 		this.comments = readContentToMap(file,this.commentSpliter);
@@ -98,7 +113,7 @@ public class TXTCommentAnalyzer {
 		try {
 			this.txtWriter = new PrintWriter(FileUtil.writeableFile(file.getParent()+"\\txt\\allfiltered.txt"));
 			this.csvWriter = new PrintWriter(FileUtil.writeableFile(file.getParent()+"\\csv\\allfiltered.csv"));
-			this.noTemplateCommentWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\noTemplate\\noTemplateComments.txt"));
+			this.noTemplateCommentWriter = new PrintWriter(FileUtil.writeableFile(this.txtCommentFilePath+"\\noTemplateAll\\noTemplateComments.txt"));
 		} catch (FileNotFoundException e1) {
 			e1.printStackTrace();
 		} catch (IOException e1) {
@@ -139,7 +154,7 @@ public class TXTCommentAnalyzer {
 	 * 将制定类型的注释文件的内容全部读入到comments这个map中
 	 * 键为 注释的源代码的文件路径  值为 注释的内容
 	 */
-	public Map<String,String> readContentToMap(File file,String commentSpliter){
+	public static Map<String,String> readContentToMap(File file,String commentSpliter){
 		Map<String,String> allComments = new TreeMap<String, String>();
 		try {
 			BufferedReader reader = new BufferedReader(
@@ -223,10 +238,6 @@ public class TXTCommentAnalyzer {
 		return c;
 	}
 	
-	public void extractTemplate(String filename,boolean outputTemplate){
-		extractTemplate(filename, outputTemplate,TXTCommentAnalyzer.EXTRACTPOLICY_STRICT);
-	}
-	
 	
 	/**
 	 * 识别当前类别的注释下，传入的linux源代码的文件名的所有注释中，是否有模板存在，提取出模板
@@ -235,7 +246,7 @@ public class TXTCommentAnalyzer {
 	 * @param filename  传入的linux源代码的文件名
 	 * @param outputTemplate 是否将模板信息输出到文件
 	 */
-	public void extractTemplate(String filename,boolean outputTemplate,int extractPolicy){
+	public void extractTemplate(String filename,boolean outputTemplate){
 		//先拿到该文件的所有注释
 		List<String> fileComments = this.getFileComments(filename);
 		Map<String,Integer> candidateCount = new HashMap<String, Integer>();
@@ -340,7 +351,7 @@ public class TXTCommentAnalyzer {
 	 * @return     源代码文件名  如 /virt/kvm/kvm_main.c
 	 */
 	public String getCommentFileName(String line){
-		if(this.lxr_type!=LxrType.file){
+		if(this.lxr_type!="file"){
 			return line.substring(0, line.lastIndexOf("/"));
 		}
 		return line;
@@ -370,20 +381,16 @@ public class TXTCommentAnalyzer {
 	
 	
 	public static void main(String[] args) throws IOException{
-//		File file = FileUtil.readableFile("D:\\research_gxw\\1_4comment\\data\\filteredComment.txt");
-//		TXTCommentAnalyzer a = new TXTCommentAnalyzer(file);
-		log.setLevel(Level.INFO);
-		for(int lxrtype : LxrType.getTypeValues()){
-			TXTCommentAnalyzer a = new TXTCommentAnalyzer(lxrtype);
-			//		System.out.println(a.getCommentsNumber());
-			//		System.out.println(a.getFileNumber());
+		log.setLevel(Level.WARN);
+		for(String lxrtype : LxrType.getTypeList()){
+//			TXTCommentAnalyzer a = new TXTCommentAnalyzer(lxrtype,EXTRACTPOLICY_STRICT);
+			TXTCommentAnalyzer a = new TXTCommentAnalyzer(lxrtype,EXTRACTPOLICY_MIDDLE);
+//			TXTCommentAnalyzer a = new TXTCommentAnalyzer(lxrtype,EXTRACTPOLICY_LOOSE);
 
-			boolean outputTemplate = false;
+			boolean outputTemplate = true;
 			boolean outputNoTemplateComments = false;
 			for(String f:a.fileset){
-				//			System.out.println(file+":"+a.getFileComments(file).size());
-				//			System.out.println("########################");
-				a.extractTemplate(f,outputTemplate,TXTCommentAnalyzer.EXTRACTPOLICY_STRICT);
+				a.extractTemplate(f,outputTemplate);
 			}
 			if(outputNoTemplateComments){
 				a.outputNoTemplateCommentToFile(a.comments, a.fileTemplates, a.noTemplateCommentWriter, a.commentSpliter);

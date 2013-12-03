@@ -16,14 +16,14 @@ public class CommentStatistics {
 	
 	public static void main(String[] args) throws IOException {
 		log.setLevel(Level.INFO);
-		for(int lxrtype : LxrType.getTypeValues()){
-			log.info(lxrtype + " Lxy_type:"+LxrType.getTypeName(lxrtype));
+		for(String lxrtype : LxrType.getTypeList()){
+			log.info("Lxy_type:"+lxrtype);
 			
-			TXTCommentAnalyzer a = new TXTCommentAnalyzer(lxrtype);
+			TXTCommentAnalyzer a = new TXTCommentAnalyzer(lxrtype,false);
 			Map<String,String> comments = a.getComments();
-			Map<String,String> noTemplateStrictComments = a.readContentToMap(FileUtil.readableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\noTemplate_EXTRACTPOLICY_STRICT\\"+LxrType.getTypeName(lxrtype)+".txt"), TXTCommentAnalyzer.DEFAULTSPLITER);
-			Map<String,String> noTemplateMiddleComments = a.readContentToMap(FileUtil.readableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\noTemplate_EXTRACTPOLICY_MIDDLE\\"+LxrType.getTypeName(lxrtype)+".txt"), TXTCommentAnalyzer.DEFAULTSPLITER);
-			Map<String,String> noTemplateLooseComments = a.readContentToMap(FileUtil.readableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\noTemplate_EXTRACTPOLICY_LOOSE\\"+LxrType.getTypeName(lxrtype)+".txt"), TXTCommentAnalyzer.DEFAULTSPLITER);
+			Map<String,String> noTemplateStrictComments = a.readContentToMap(FileUtil.readableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\noTemplate_"+TXTCommentAnalyzer.EXTRACTPOLICY[TXTCommentAnalyzer.EXTRACTPOLICY_STRICT]+"\\"+lxrtype+".txt"), TXTCommentAnalyzer.DEFAULTSPLITER);
+			Map<String,String> noTemplateMiddleComments = a.readContentToMap(FileUtil.readableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\noTemplate_"+TXTCommentAnalyzer.EXTRACTPOLICY[TXTCommentAnalyzer.EXTRACTPOLICY_MIDDLE]+"\\"+lxrtype+".txt"), TXTCommentAnalyzer.DEFAULTSPLITER);
+			Map<String,String> noTemplateLooseComments = a.readContentToMap(FileUtil.readableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\noTemplate_"+TXTCommentAnalyzer.EXTRACTPOLICY[TXTCommentAnalyzer.EXTRACTPOLICY_LOOSE]+"\\"+lxrtype+".txt"), TXTCommentAnalyzer.DEFAULTSPLITER);
 			outputStatResult(lxrtype, comments,noTemplateStrictComments,noTemplateMiddleComments,noTemplateLooseComments);
 			
 //			for(Map.Entry<String,String> entry:comments.entrySet()){
@@ -41,10 +41,10 @@ public class CommentStatistics {
 		}
 	}
 	
-	public static void outputStatResult(int lxrtype,Map<String,String> comments,Map<String,String> noTemplateStrictComments,Map<String,String> noTemplateMiddleComments,Map<String,String> noTemplateLooseComments){
+	public static void outputStatResult(String lxrtype,Map<String,String> comments,Map<String,String> noTemplateStrictComments,Map<String,String> noTemplateMiddleComments,Map<String,String> noTemplateLooseComments){
 		try {
-			PrintWriter writer = new PrintWriter(FileUtil.writeableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\statistic\\"+lxrtype+".csv"));
-			PrintWriter matlab_writer = new PrintWriter(FileUtil.writeableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\statistic\\m"+lxrtype+".csv"));
+			PrintWriter writer = new PrintWriter(FileUtil.writeableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\statistic\\"+LxrType.getTypeIndex(lxrtype)+".csv"));
+			PrintWriter matlab_writer = new PrintWriter(FileUtil.writeableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\statistic\\m"+LxrType.getTypeIndex(lxrtype)+".csv"));
 			writer.write("注释路径,注释长度,中文字符数,过滤strict型模板后长度,strict中文字符数,strict型模板长度,过滤middle型模板后长度,middle中文字符数,middle型模板长度,过滤loose型模板后长度,loose中文字符数,loose型模板长度\r\n");
 			for(Map.Entry<String,String> entry:comments.entrySet()){
 				String commentContent = entry.getValue().trim();
@@ -65,5 +65,23 @@ public class CommentStatistics {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+	
+	public String statisticInfo(String path,String lxrtype) throws IOException{
+		TXTCommentAnalyzer a = new TXTCommentAnalyzer(lxrtype,false);
+		Map<String,String> comments = a.getComments();
+		Map<String,String> noTemplateStrictComments = a.readContentToMap(FileUtil.readableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\noTemplate_"+TXTCommentAnalyzer.EXTRACTPOLICY[TXTCommentAnalyzer.EXTRACTPOLICY_STRICT]+"\\"+lxrtype+".txt"), TXTCommentAnalyzer.DEFAULTSPLITER);
+		String commentContent = comments.get(path).trim();
+		String chinesePart = commentContent.replaceAll("[a-zA-Z]+[\\s\\pP<>]*", "");
+		String strict = noTemplateStrictComments.get(path).trim();
+		String chineseStrict = strict.replaceAll("[a-zA-Z]+[\\s\\pP<>]*", "");
+		
+		StringBuilder stat = new StringBuilder();
+		stat.append("注释长度:"+commentContent.length()+"\r\n");
+		stat.append("中文字符数:"+chinesePart.length()+"\r\n");
+		stat.append("过滤strict型模板后长度:"+strict.length()+"\r\n");
+		stat.append("过滤strict型模板后中文字符数:"+chineseStrict.length()+"\r\n");
+		
+		return stat.toString();
 	}
 }

@@ -12,10 +12,8 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -27,10 +25,11 @@ public class CommentClassifier {
 	private Properties props;
 	private Connection conn;
 	private String rootPath;
+	private String classifiedCommentPath;
 	
 	// 这个map是分类的时候用，有多少种注释种类，就用type名作为键，建立不同的writer，往不同的文件里面写
 	static Map<String,PrintWriter> WRITERMAP = new HashMap<String, PrintWriter>(); 
-	static String COMMENTSANDTYPES = "CommentsAndTypes.txt";
+	public static String COMMENTSANDTYPES = "CommentsAndTypes.txt";
 
 	
 	public CommentClassifier(){
@@ -57,6 +56,7 @@ public class CommentClassifier {
 			e.printStackTrace();
 		}
 		this.rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
+		this.classifiedCommentPath = rootPath+props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.classifiedCommentPath","CLASSIFIED");
 	}
 	
 	public Connection getConn() {
@@ -73,23 +73,59 @@ public class CommentClassifier {
 		}
 	}
 	
-	public void getAllCommentedTypes(){
-		try {
-			BufferedReader reader = new BufferedReader(new FileReader("path.txt"));
-			PrintWriter writer = new PrintWriter(new FileWriter(COMMENTSANDTYPES));
-			String line ="";
-			while((line=reader.readLine())!=null){
-				writer.write(line+","+getType(line)+"\r\n");
+	public Set<String> getAllCommentedTypes() throws IOException{
+		File typeFile = new File(COMMENTSANDTYPES);
+		if(!typeFile.exists()){
+			getAllCommentedTypes(true);
+		}
+		return loadTypeSet();
+	}
+	
+	private Set<String> loadTypeSet() throws IOException{
+		File typeFile = new File(COMMENTSANDTYPES);
+		BufferedReader typereader = new BufferedReader(new FileReader(typeFile));
+		Set<String> typeset = new HashSet<String>();
+		String oneline = "";
+		while((oneline=typereader.readLine())!=null){
+			String[] str = oneline.split(",");
+			typeset.add(str[1]);
+		}
+		typereader.close();
+		return typeset;
+	}
+	
+	private Map<String,String> loadCommentTypeMap() throws IOException{
+		File typeFile = new File(COMMENTSANDTYPES);
+		BufferedReader typereader = new BufferedReader(new FileReader(typeFile));
+		Map<String, String> commentTypeMap = new HashMap<String,String>();
+		String oneline = "";
+		while((oneline=typereader.readLine())!=null){
+			String[] str = oneline.split(",");
+			commentTypeMap.put(str[0], str[1]);
+		}
+		typereader.close();
+		return commentTypeMap;
+	}
+	
+	public void getAllCommentedTypes(boolean genNewFile){
+		if(genNewFile){
+			try {
+				BufferedReader reader = new BufferedReader(new FileReader("path.txt"));
+				PrintWriter writer = new PrintWriter(new FileWriter(COMMENTSANDTYPES));
+				String line ="";
+				while((line=reader.readLine())!=null){
+					writer.write(line+","+getType(line)+"\r\n");
+				}
+				reader.close();
+				writer.flush();
+				writer.close();
+			} catch (FileNotFoundException e) {
+				e.printStackTrace();
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (SQLException e) {
+				e.printStackTrace();
 			}
-			reader.close();
-			writer.flush();
-			writer.close();
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		} catch (SQLException e) {
-			e.printStackTrace();
 		}
 	}
 	
@@ -97,18 +133,10 @@ public class CommentClassifier {
 	public void classifyComment() throws IOException{
 		File typeFile = new File(COMMENTSANDTYPES);
 		if(!typeFile.exists()){
-			getAllCommentedTypes();
+			getAllCommentedTypes(true);
 		}
-		BufferedReader typereader = new BufferedReader(new FileReader(typeFile));
-		Map<String, String> commentTypeMap = new HashMap<String,String>();
-		Set<String> typeset = new HashSet<String>();
-		String oneline = "";
-		while((oneline=typereader.readLine())!=null){
-			String[] str = oneline.split(",");
-			commentTypeMap.put(str[0], str[1]);
-			typeset.add(str[1]);
-		}
-		typereader.close();
+		Set<String> typeset = loadTypeSet();
+		Map<String,String> commentTypeMap = loadCommentTypeMap();
 
 		prepareWriter(typeset);
 
@@ -153,7 +181,7 @@ public class CommentClassifier {
 		
 		for(String s:typeset){
 			try {
-				File file = FileUtil.writeableFile(rootPath+"CLASSIFIED/CLASSIFICATION_"+s+".txt");
+				File file = FileUtil.writeableFile(classifiedCommentPath+"/CLASSIFICATION_"+s+".txt");
 				WRITERMAP.put(s, new PrintWriter(file));
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
@@ -182,36 +210,44 @@ public class CommentClassifier {
 	 * @param line  一行的内容类似于这样  /arch/arm/boot/compressed/atags_to_fdt.c/atags_to_fdt(0047)(linux-3.5.4)
 	 * @return
 	 * @throws SQLException
+	 * @throws IOException 
 	 */
-	public String getType(String line) throws SQLException{
-		String comm_filename = "";
-		String comm_symname = "";
-		int comm_linenoInFile = -1;
-		String type = "";
-		
-		if (line.contains("(linux-3.5.4)")) {
-			int pos = line.lastIndexOf("(linux-3.5.4)");
-			if(line.charAt(pos-1)!=')'){
-				comm_filename = line.substring(0,pos);
-			}else{
-				line = line.substring(0,pos);
-				int pos_lineNo = line.lastIndexOf("(")+1;
-				comm_linenoInFile = Integer.parseInt(line.substring(pos_lineNo,line.length()-1));
-				int pos_slash = line.lastIndexOf("/");
-				comm_filename = line.substring(0,pos_slash);
-				comm_symname = line.substring(pos_slash+1,pos_lineNo-1);
-			}
-			
-			if (!comm_symname.equals("") && comm_linenoInFile != -1) {
-				type = getType(comm_filename, comm_symname, comm_linenoInFile);
-			}else{
-				type = "file";
-			}
-			
+	public String getType(String line) throws SQLException, IOException{
+		File typeFile = new File(COMMENTSANDTYPES);
+		boolean loaded = typeFile.exists();
+		if(loaded){
+			Map<String, String> commentTypeMap = loadCommentTypeMap();
+			return commentTypeMap.get(line);
 		}else{
-			type = "exception_android";
+			String comm_filename = "";
+			String comm_symname = "";
+			int comm_linenoInFile = -1;
+			String type = "";
+
+			if (line.contains("(linux-3.5.4)")) {
+				int pos = line.lastIndexOf("(linux-3.5.4)");
+				if(line.charAt(pos-1)!=')'){
+					comm_filename = line.substring(0,pos);
+				}else{
+					line = line.substring(0,pos);
+					int pos_lineNo = line.lastIndexOf("(")+1;
+					comm_linenoInFile = Integer.parseInt(line.substring(pos_lineNo,line.length()-1));
+					int pos_slash = line.lastIndexOf("/");
+					comm_filename = line.substring(0,pos_slash);
+					comm_symname = line.substring(pos_slash+1,pos_lineNo-1);
+				}
+
+				if (!comm_symname.equals("") && comm_linenoInFile != -1) {
+					type = getType(comm_filename, comm_symname, comm_linenoInFile);
+				}else{
+					type = "file";
+				}
+
+			}else{
+				type = "exception_android";
+			}
+			return type;
 		}
-		return type;
 	}
 	
 	
