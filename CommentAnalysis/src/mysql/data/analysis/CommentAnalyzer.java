@@ -13,6 +13,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -414,7 +416,7 @@ public class CommentAnalyzer {
 				templates.add(entry.getKey());
 			}
 		}
-		return templates;
+		return removeDuplicatedSubTemplate(templates);
 	}
 	
 	/**
@@ -441,6 +443,33 @@ public class CommentAnalyzer {
 		rs.close();
 		stmt.close();
 		return c;
+	}
+	
+	/**
+	 * 获取一个linux源代码下的所有注释，按lxr类别归类统计注释条数
+	 * @param filename  	传入的linux源代码的文件名
+	 * @return   按lxr类别归类统计注释条数
+	 * @throws SQLException
+	 */
+	public Map<String,Integer> getFileComments(String filename)throws SQLException{
+		Map<String,Integer> type_and_comments_count = new HashMap<String,Integer>();
+		Statement stmt = this.storage_conn.createStatement();
+		StringBuilder sql = new StringBuilder();
+		sql.append("select lxr_type,count(*) from comment where path_file='"+filename+"' group by lxr_type;");
+		ResultSet rs = stmt.executeQuery(sql.toString());
+		
+		String type = "";
+		int count = 0;
+		while (rs.next()) {
+			type=rs.getString(1);
+			count = rs.getInt(2);
+			type_and_comments_count.put(type, count);
+		}
+		
+		rs.close();
+		stmt.close();
+		
+		return type_and_comments_count;
 	}
 	
 	public List<String> getAllCommentedLxrtypes() throws SQLException{
@@ -499,12 +528,44 @@ public class CommentAnalyzer {
 		return splits;
 	}
 	
+	/**
+	 * 从传入的注释内容中过滤掉模板的内容，返回过滤模板信息以后的注释
+	 * @param comment  传入的注释
+	 * @param templates  传入的模板信息
+	 * @return
+	 */
 	public String removeTemplateFromComment(String comment,Set<String> templates){
 		comment = comment.trim();
 		for(String template:templates){
 			comment = comment.replaceAll("n?[[\\s|\\pP]&&[^\\n]]*"+template+"(\\s)*[:|：]", "");
 		}
 		return comment;
+	}
+	
+	/**
+	 * 如果发现模板中有模板包含短模板的现象，就将短的从模板集合中去掉。
+	 * @param templates
+	 * @return
+	 */
+	public Set<String> removeDuplicatedSubTemplate(Set<String> templates){
+		List<String> templatesList = new ArrayList<String>();
+		templatesList.addAll(templates);
+		//将templatesList中的模板按照从长到短的排列
+		Collections.sort(templatesList, new Comparator<String>() {
+			@Override
+			public int compare(String str1, String str2) {
+				return str2.length()-str1.length();
+			}
+		});
+		//如果发现模板中有模板包含短模板的现象，就将短的从模板集合中去掉。
+		for(int i=0;i<templatesList.size();i++){
+			for(int j=i+1;j<templatesList.size();j++){
+				if(templatesList.get(i).contains(templatesList.get(j))){
+					templates.remove(templatesList.get(j));
+				}
+			}
+		}
+		return templates;
 	}
 	
 	public CommentTableInfo getCommentFromAnalysisStorage(String comment_path) throws SQLException{

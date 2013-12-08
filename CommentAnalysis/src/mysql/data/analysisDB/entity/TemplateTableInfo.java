@@ -56,21 +56,24 @@ public class TemplateTableInfo {
 		String[] st = rs.getString(4).split(";");
 		Set<String> strict_template = new HashSet<String>();
 		for(String s:st){
-			strict_template.add(s);
+			if(!s.equals(""))
+				strict_template.add(s);
 		}
 		this.setStrict_template(strict_template);
 		
 		String[] mt = rs.getString(5).split(";");
 		Set<String> middle_template = new HashSet<String>();
 		for(String m:mt){
-			middle_template.add(m);
+			if(!m.equals(""))
+				middle_template.add(m);
 		}
 		this.setMiddle_template(middle_template);
 		
 		String[] lt = rs.getString(6).split(";");
 		Set<String> loose_template = new HashSet<String>();
 		for(String l:lt){
-			loose_template.add(l);
+			if(!l.equals(""))
+				loose_template.add(l);
 		}
 		this.setLoose_template(loose_template);
 	}

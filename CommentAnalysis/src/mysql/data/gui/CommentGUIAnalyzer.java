@@ -6,6 +6,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.sql.SQLException;
+import java.util.Map;
 
 import javax.swing.JButton;
 import javax.swing.JFrame;
@@ -23,6 +24,7 @@ import mysql.data.analysisDB.entity.TemplateTableInfo;
 import org.dyno.visual.swing.layouts.Constraints;
 import org.dyno.visual.swing.layouts.GroupLayout;
 import org.dyno.visual.swing.layouts.Leading;
+import org.jb2011.lnf.beautyeye.BeautyEyeLNFHelper;
 
 //VS4E -- DO NOT REMOVE THIS LINE!
 public class CommentGUIAnalyzer extends JFrame {
@@ -45,6 +47,7 @@ public class CommentGUIAnalyzer extends JFrame {
 	}
 
 	private void initComponents() {
+		setBackground(Color.WHITE);
 		setTitle("源码注释分析工具");
 		setFont(new Font("Dialog", Font.PLAIN, 12));
 		setForeground(Color.black);
@@ -153,7 +156,7 @@ public class CommentGUIAnalyzer extends JFrame {
 	}
 
 	public static void main(String[] args) throws Exception {
-//		BeautyEyeLNFHelper.launchBeautyEyeLNF();
+		BeautyEyeLNFHelper.launchBeautyEyeLNF();
 		
 		JFrame frame = new CommentGUIAnalyzer();
 		frame.setVisible(true);
@@ -172,19 +175,27 @@ public class CommentGUIAnalyzer extends JFrame {
 			String commentRemoveLooseTemplate = ca.removeTemplateFromComment(cti.getFiltered_comment(), tti.getLoose_template());
 			
 			StringBuilder statisticInfo = new StringBuilder();
-			statisticInfo.append("源代码路径："+path+"\r\n");
+			statisticInfo.append("路径："+path+"\r\n");
 			statisticInfo.append("lxr类型："+cti.getLxr_type()+"\r\n");
-			statisticInfo.append("原始注释长度："+cti.getFiltered_comment().length()+"\r\n");
-			statisticInfo.append("中文字符数："+ca.getChineseComment(cti.getFiltered_comment()).length()+"\r\n");
+			String filteredComment = cti.getFiltered_comment();
+			String chinesePart = ca.getChineseComment(filteredComment);
+			statisticInfo.append("原始注释长度："+filteredComment.length()+"\t");
+			statisticInfo.append("中文字符数："+chinesePart.length()+"\r\n");
+			statisticInfo.append("中文字符比例："+(double)chinesePart.length()/filteredComment.length()+"\r\n");
 			statisticInfo.append("包含[[File:]]标记数："+cti.getFiletag_count()+"\r\n");
+			statisticInfo.append(cti.getPath_file()+" 包含注释：\r\n");
+			int count = 0;
+			for(Map.Entry<String, Integer> entry:ca.getFileComments(cti.getPath_file()).entrySet()){
+				statisticInfo.append("\t"+entry.getKey()+"类型:"+entry.getValue()+"条\r\n");
+				count += entry.getValue();
+			}
+			statisticInfo.append("合计包含注释："+count+"条\r\n");
 			statisticInfo.append("\r\n");
 			
 			statisticInfo.append("strict模板包含词数："+tti.getStrict_template().size()+"\r\n");
 			statisticInfo.append("过滤strict模板后注释长度："+commentRemoveStrictTemplate.length()+"\r\n");
-			statisticInfo.append("\r\n");
 			statisticInfo.append("middle模板包含词数："+tti.getMiddle_template().size()+"\r\n");
 			statisticInfo.append("过滤middle模板后注释长度："+commentRemoveMiddleTemplate.length()+"\r\n");
-			statisticInfo.append("\r\n");
 			statisticInfo.append("loose模板包含词数："+tti.getLoose_template().size()+"\r\n");
 			statisticInfo.append("过滤loose模板后注释长度："+commentRemoveLooseTemplate.length()+"\r\n");
 			
