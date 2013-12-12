@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.util.Properties;
 
@@ -41,9 +40,13 @@ public class DataClean {
 	static void filterComment(FilterBase filter) throws IOException{
 		props = PropertiesUtil.getProperties();
 		String rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
+		String allCommentsFile = props.getProperty("mysql.data.DataSource.allCommentsFile","allComments.txt");
+		String filteredCommentsFile = props.getProperty("mysql.data.DataClean.filteredCommentsFile","filteredComment.txt");
 		try {
-			BufferedReader reader = new BufferedReader(new FileReader(rootPath+"/allComments.txt"));
-			PrintWriter writer = new PrintWriter(rootPath+"/filteredComment.txt");
+//			BufferedReader reader = new BufferedReader(new FileReader(rootPath+"/allComments.txt"));
+//			PrintWriter writer = new PrintWriter(rootPath+"/filteredComment.txt");
+			BufferedReader reader = new BufferedReader(new FileReader(rootPath+"/"+allCommentsFile));
+			PrintWriter writer = new PrintWriter(rootPath+"/"+filteredCommentsFile);
 			StringBuilder comment = new StringBuilder();
 			comment.append(reader.readLine()+"\r\n");
 			String line = "";

@@ -26,10 +26,10 @@ public class CommentClassifier {
 	private Connection conn;
 	private String rootPath;
 	private String classifiedCommentPath;
+	private String commentAndTypes;
 	
 	// 这个map是分类的时候用，有多少种注释种类，就用type名作为键，建立不同的writer，往不同的文件里面写
 	static Map<String,PrintWriter> WRITERMAP = new HashMap<String, PrintWriter>(); 
-	public static String COMMENTSANDTYPES = "CommentsAndTypes.txt";
 
 	
 	public CommentClassifier(){
@@ -57,6 +57,7 @@ public class CommentClassifier {
 		}
 		this.rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
 		this.classifiedCommentPath = rootPath+props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.classifiedCommentPath","CLASSIFIED");
+		this.commentAndTypes = props.getProperty("mysql.data.CommentClassifier.commentsAndTypes");
 	}
 	
 	public Connection getConn() {
@@ -74,7 +75,7 @@ public class CommentClassifier {
 	}
 	
 	public Set<String> getAllCommentedTypes() throws IOException{
-		File typeFile = new File(COMMENTSANDTYPES);
+		File typeFile = new File(commentAndTypes);
 		if(!typeFile.exists()){
 			getAllCommentedTypes(true);
 		}
@@ -82,7 +83,7 @@ public class CommentClassifier {
 	}
 	
 	private Set<String> loadTypeSet() throws IOException{
-		File typeFile = new File(COMMENTSANDTYPES);
+		File typeFile = new File(commentAndTypes);
 		BufferedReader typereader = new BufferedReader(new FileReader(typeFile));
 		Set<String> typeset = new HashSet<String>();
 		String oneline = "";
@@ -95,7 +96,7 @@ public class CommentClassifier {
 	}
 	
 	private Map<String,String> loadCommentTypeMap() throws IOException{
-		File typeFile = new File(COMMENTSANDTYPES);
+		File typeFile = new File(commentAndTypes);
 		BufferedReader typereader = new BufferedReader(new FileReader(typeFile));
 		Map<String, String> commentTypeMap = new HashMap<String,String>();
 		String oneline = "";
@@ -110,8 +111,8 @@ public class CommentClassifier {
 	public void getAllCommentedTypes(boolean genNewFile){
 		if(genNewFile){
 			try {
-				BufferedReader reader = new BufferedReader(new FileReader("path.txt"));
-				PrintWriter writer = new PrintWriter(new FileWriter(COMMENTSANDTYPES));
+				BufferedReader reader = new BufferedReader(new FileReader(props.getProperty("mysql.data.DataSource.pathFile")));
+				PrintWriter writer = new PrintWriter(new FileWriter(commentAndTypes));
 				String line ="";
 				while((line=reader.readLine())!=null){
 					writer.write(line+","+getType(line)+"\r\n");
@@ -131,7 +132,7 @@ public class CommentClassifier {
 	
 	@SuppressWarnings("resource")
 	public void classifyComment() throws IOException{
-		File typeFile = new File(COMMENTSANDTYPES);
+		File typeFile = new File(commentAndTypes);
 		if(!typeFile.exists()){
 			getAllCommentedTypes(true);
 		}
@@ -143,7 +144,7 @@ public class CommentClassifier {
 		//通过不断读取保存一条注释内容，读满一条就写出
 		StringBuilder comment = new StringBuilder();
 		BufferedReader reader = new BufferedReader(
-				new FileReader(rootPath+"/filteredComment.txt"));
+				new FileReader(rootPath+"/"+props.getProperty("mysql.data.DataClean.filteredCommentsFile")));
 
 		//先把首行读出来，判断一个类别，初始化好 currentWriter
 		String line = reader.readLine();
@@ -213,7 +214,7 @@ public class CommentClassifier {
 	 * @throws IOException 
 	 */
 	public String getType(String line) throws SQLException, IOException{
-		File typeFile = new File(COMMENTSANDTYPES);
+		File typeFile = new File(commentAndTypes);
 		boolean loaded = typeFile.exists();
 		if(loaded){
 			Map<String, String> commentTypeMap = loadCommentTypeMap();
@@ -262,8 +263,6 @@ public class CommentClassifier {
 	 */
 	public String getType(String filename,String symbolname,int lineNo) throws SQLException{
 		String type = "";
-		String url = "jdbc:mysql://192.168.160.131:3306/lxr?user=root&password=123123";
-		Connection conn = DriverManager.getConnection(url);
 		Statement stmt = conn.createStatement();
 		
 		ResultSet rs = stmt
@@ -279,7 +278,6 @@ public class CommentClassifier {
 		
 		
 		stmt.close();
-		conn.close();
 		
 		return type;
 	}
@@ -287,6 +285,7 @@ public class CommentClassifier {
 	public static void main(String[] args) throws IOException {
 		CommentClassifier cc = new CommentClassifier();
 		cc.classifyComment();
+		cc.closeDBConnection();
 		System.out.println("done");
 	}
 }

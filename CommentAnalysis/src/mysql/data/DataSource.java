@@ -22,6 +22,10 @@ public class DataSource {
 	private Properties props = new Properties();
 	private Connection conn;
 	private String rootPath;
+	//包含所有已注释的函数，宏，变量的路径的文件
+	private String pathFile;
+	//保存所有注释内容的文件
+	private String allCommentsFile;
 
 	public static void main(String[] args) {
 		try {
@@ -60,6 +64,8 @@ public class DataSource {
 		}
 		
 		rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
+		pathFile = props.getProperty("mysql.data.DataSource.pathFile","path.txt");
+		allCommentsFile = props.getProperty("mysql.data.DataSource.allCommentsFile","allComments.txt");
 		
 	}
 	
@@ -78,11 +84,10 @@ public class DataSource {
 	}
 	
 	public void loadCommentToFile() throws SQLException{
-		File allModulePath = new File("path.txt");
+		File allModulePath = new File(pathFile);
 		if(!allModulePath.exists()){
 			getModules();
 		}
-//		loadData();
 		loadAllCommentInOneFile();
 	}
 	
@@ -94,10 +99,10 @@ public class DataSource {
 		Statement stmt = conn.createStatement();
 		PrintWriter writer = null;
 		try {
-			BufferedReader reader = new BufferedReader(new FileReader("path.txt"));
+			BufferedReader reader = new BufferedReader(new FileReader(pathFile));
 			String line = "";
 			
-			File file = new File(rootPath+"/allComments.txt");
+			File file = new File(rootPath+"/"+allCommentsFile);
 			File parent = file.getParentFile();
 			if(parent!=null&&!parent.exists()){
 				parent.mkdirs();
@@ -119,38 +124,38 @@ public class DataSource {
 		}
 	}
 	
-	/**
-	 * 将数据库中的源代码注释取出，按照源代码的路径放到相应的文件中
-	 * @param stmt
-	 * @throws SQLException 
-	 */
-	private void loadData() throws SQLException{
-		Statement stmt = conn.createStatement();
-		PrintWriter writer = null;
-		try {
-			BufferedReader reader = new BufferedReader(new FileReader("path.txt"));
-			String line = "";
-			while((line = reader.readLine())!=null){
-				File file = new File(rootPath+line+".txt");
-				File parent = file.getParentFile();
-				if(parent!=null&&!parent.exists()){
-					parent.mkdirs();
-				}
-				file.createNewFile();
-				
-				writer = new PrintWriter(file);
-				writer.write(getComment(stmt, line));
-				writer.flush();
-			}
-			writer.close();
-			reader.close();
-			stmt.close();
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-	}
+//	/**
+//	 * 将数据库中的源代码注释取出，按照源代码的路径放到相应的文件中
+//	 * @param stmt
+//	 * @throws SQLException 
+//	 */
+//	private void loadData() throws SQLException{
+//		Statement stmt = conn.createStatement();
+//		PrintWriter writer = null;
+//		try {
+//			BufferedReader reader = new BufferedReader(new FileReader("path.txt"));
+//			String line = "";
+//			while((line = reader.readLine())!=null){
+//				File file = new File(rootPath+line+".txt");
+//				File parent = file.getParentFile();
+//				if(parent!=null&&!parent.exists()){
+//					parent.mkdirs();
+//				}
+//				file.createNewFile();
+//				
+//				writer = new PrintWriter(file);
+//				writer.write(getComment(stmt, line));
+//				writer.flush();
+//			}
+//			writer.close();
+//			reader.close();
+//			stmt.close();
+//		} catch (FileNotFoundException e) {
+//			e.printStackTrace();
+//		} catch (IOException e) {
+//			e.printStackTrace();
+//		}
+//	}
 
 	/**
 	 * 得到所有已有analyst写的文件和标识符注释 的 源代码路径，写入到文件path中
@@ -166,7 +171,7 @@ public class DataSource {
 							+ "on a.page_id=b.rev_page where a.page_namespace=0 and b.rev_user in "
 							+ "(select ug_user from user_groups where ug_group = 'analyst');");
 
-			PrintWriter writer = new PrintWriter(new FileWriter("path.txt"));
+			PrintWriter writer = new PrintWriter(new FileWriter(pathFile));
 
 			while (rs.next()) {
 				if(rs.getString(1).startsWith("/"))

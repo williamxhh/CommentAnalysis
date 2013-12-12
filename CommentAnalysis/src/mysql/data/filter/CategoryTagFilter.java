@@ -21,7 +21,7 @@ public class CategoryTagFilter implements FilterBase{
 		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll("");
 		
 		//过滤丢失的File标记     [[File:]]
-		regex = "\\[\\[File[:|：][[^\\s]*\\]\\]]*";
+		regex = "\\[\\[File[:|：].*\\]\\]";
 		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll("");
 		
 		return filter.getText(inprocess.trim());

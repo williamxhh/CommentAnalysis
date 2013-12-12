@@ -3,6 +3,7 @@
 .project
 /.settings
 /commentData/
+/linux-3.5.4/
 CommentsAndTypes.txt
 Filename_Symbolname_LineNo.txt
 Filename_Symbolname_LineNo_Type.txt

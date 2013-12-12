@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.lang.Thread.State;
 import java.nio.charset.Charset;
 import java.sql.Blob;
 import java.sql.Connection;
@@ -124,6 +123,22 @@ public class CommentAnalyzer {
 		logger.info("done");
 	}
 	
+	public String getSourceCode(String file,int startLine,int lineCount) throws IOException{
+		File sourceFile = new File(this.props.getProperty("mysql.data.analysis.CommentAnalyzer.sourcecodeDir","linux-3.5.4/")+file);
+		BufferedReader reader = new BufferedReader(new FileReader(sourceFile));
+		int lineNo = 1;
+		while(lineNo<startLine){
+			reader.readLine();
+			lineNo++;
+		}
+		StringBuffer sourcecode = new StringBuffer();
+		for(int i=0;i<lineCount;i++){
+			sourcecode.append(reader.readLine()+"\r\n");
+		}
+		reader.close();
+		return sourcecode.toString();
+	}
+	
 	public void loadDataToAnalysisDB() throws SQLException, IOException{
 		Map<String,String> comments = getAllComments(loadFromFile);
 		Statement stmt = storage_conn.createStatement();
@@ -215,7 +230,7 @@ public class CommentAnalyzer {
 		String type = "";
 		
 		if(loadFromFile){
-			BufferedReader reader = new BufferedReader(new FileReader(CommentClassifier.COMMENTSANDTYPES));
+			BufferedReader reader = new BufferedReader(new FileReader(props.getProperty("mysql.data.CommentClassifier.commentsAndTypes")));
 			String oneline = "";
 			while((oneline=reader.readLine())!=null){
 				if(oneline.startsWith(line)){
