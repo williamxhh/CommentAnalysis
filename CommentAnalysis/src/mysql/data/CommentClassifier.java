@@ -18,10 +18,13 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import org.apache.log4j.Logger;
+
 import mysql.data.util.FileUtil;
 import mysql.data.util.PropertiesUtil;
 
 public class CommentClassifier {
+	private static final Logger log = Logger.getLogger(CommentClassifier.class);
 	private Properties props;
 	private Connection conn;
 	private String rootPath;
@@ -115,8 +118,10 @@ public class CommentClassifier {
 				PrintWriter writer = new PrintWriter(new FileWriter(commentAndTypes));
 				String line ="";
 				while((line=reader.readLine())!=null){
+					log.info("call getType() "+ line); 
 					writer.write(line+","+getType(line)+"\r\n");
 				}
+				log.info("getAllCommentedTypes() COMPLETE");
 				reader.close();
 				writer.flush();
 				writer.close();
@@ -214,41 +219,34 @@ public class CommentClassifier {
 	 * @throws IOException 
 	 */
 	public String getType(String line) throws SQLException, IOException{
-		File typeFile = new File(commentAndTypes);
-		boolean loaded = typeFile.exists();
-		if(loaded){
-			Map<String, String> commentTypeMap = loadCommentTypeMap();
-			return commentTypeMap.get(line);
-		}else{
-			String comm_filename = "";
-			String comm_symname = "";
-			int comm_linenoInFile = -1;
-			String type = "";
+		String comm_filename = "";
+		String comm_symname = "";
+		int comm_linenoInFile = -1;
+		String type = "";
 
-			if (line.contains("(linux-3.5.4)")) {
-				int pos = line.lastIndexOf("(linux-3.5.4)");
-				if(line.charAt(pos-1)!=')'){
-					comm_filename = line.substring(0,pos);
-				}else{
-					line = line.substring(0,pos);
-					int pos_lineNo = line.lastIndexOf("(")+1;
-					comm_linenoInFile = Integer.parseInt(line.substring(pos_lineNo,line.length()-1));
-					int pos_slash = line.lastIndexOf("/");
-					comm_filename = line.substring(0,pos_slash);
-					comm_symname = line.substring(pos_slash+1,pos_lineNo-1);
-				}
-
-				if (!comm_symname.equals("") && comm_linenoInFile != -1) {
-					type = getType(comm_filename, comm_symname, comm_linenoInFile);
-				}else{
-					type = "file";
-				}
-
+		if (line.contains("(linux-3.5.4)")) {
+			int pos = line.lastIndexOf("(linux-3.5.4)");
+			if(line.charAt(pos-1)!=')'){
+				comm_filename = line.substring(0,pos);
 			}else{
-				type = "exception_android";
+				line = line.substring(0,pos);
+				int pos_lineNo = line.lastIndexOf("(")+1;
+				comm_linenoInFile = Integer.parseInt(line.substring(pos_lineNo,line.length()-1));
+				int pos_slash = line.lastIndexOf("/");
+				comm_filename = line.substring(0,pos_slash);
+				comm_symname = line.substring(pos_slash+1,pos_lineNo-1);
 			}
-			return type;
+
+			if (!comm_symname.equals("") && comm_linenoInFile != -1) {
+				type = getType(comm_filename, comm_symname, comm_linenoInFile);
+			}else{
+				type = "file";
+			}
+
+		}else{
+			type = "exception_android";
 		}
+		return type;
 	}
 	
 	
@@ -272,8 +270,12 @@ public class CommentClassifier {
 						+ filename
 						+ "') and i.line = "
 						+ lineNo + ");");
-		rs.next();
-		type = rs.getString(1);
+		if(rs.next()){
+			type = rs.getString(1);
+		}else{
+			type = "UNKNOWN";
+		}
+		
 		rs.close();
 		
 		
@@ -286,6 +288,6 @@ public class CommentClassifier {
 		CommentClassifier cc = new CommentClassifier();
 		cc.classifyComment();
 		cc.closeDBConnection();
-		System.out.println("done");
+		System.out.println("CommentClassifier done");
 	}
 }

@@ -16,9 +16,12 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Properties;
 
+import org.apache.log4j.Logger;
+
 import mysql.data.util.PropertiesUtil;
 
 public class DataSource {
+	private static final Logger log = Logger.getLogger(DataSource.class);
 	private Properties props = new Properties();
 	private Connection conn;
 	private String rootPath;
@@ -30,9 +33,10 @@ public class DataSource {
 	public static void main(String[] args) {
 		try {
 			DataSource ds = new DataSource();
+			log.info("call ds.loadCommentToFile()");
 			ds.loadCommentToFile();
 			ds.closeDBConnection();
-			System.out.println("done");
+			System.out.println("DataSource done");
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
@@ -86,8 +90,10 @@ public class DataSource {
 	public void loadCommentToFile() throws SQLException{
 		File allModulePath = new File(pathFile);
 		if(!allModulePath.exists()){
+			log.info("call getModules()");
 			getModules();
 		}
+		log.info("call loadAllCommentInOneFile()");
 		loadAllCommentInOneFile();
 	}
 	
@@ -109,8 +115,11 @@ public class DataSource {
 			}
 			file.createNewFile();
 			
+			log.info("create file "+rootPath+"/"+allCommentsFile);
+			
 			writer = new PrintWriter(file);
 			while((line = reader.readLine())!=null){
+				log.info("call getComment() "+line);
 				writer.write("##**##"+line+"\r\n\r\n"+getComment(stmt, line)+"\r\n\r\n");
 			}
 			writer.flush();
@@ -174,8 +183,10 @@ public class DataSource {
 			PrintWriter writer = new PrintWriter(new FileWriter(pathFile));
 
 			while (rs.next()) {
-				if(rs.getString(1).startsWith("/"))
+				if(rs.getString(1).startsWith("/")){
 					writer.print(rs.getString(1) + "\r\n");
+					log.info("#write# "+rs.getString(1));
+				}
 			}
 			writer.flush();
 

@@ -23,7 +23,7 @@ public class DataClean {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-		System.out.println("done");
+		System.out.println("DataClean done");
 	}
 	
 	static void filterComment() throws IOException{
