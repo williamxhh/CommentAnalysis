@@ -26,7 +26,6 @@ import java.util.regex.Pattern;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
-import mysql.data.CommentClassifier;
 import mysql.data.analysisDB.entity.CommentTableInfo;
 import mysql.data.analysisDB.entity.TemplateTableInfo;
 import mysql.data.filter.CategoryTagFilter;
@@ -38,7 +37,7 @@ import mysql.data.util.PropertiesUtil;
 
 public class CommentAnalyzer {
 	private static Logger logger = Logger.getLogger(CommentAnalyzer.class);
-	private static boolean LOADDATATODB = false;
+	public static boolean LOADDATATODB = false;
 	private Properties props;
 	private Connection source_conn;
 	private Connection storage_conn;
@@ -151,9 +150,10 @@ public class CommentAnalyzer {
 			sql.append("insert into comment(comment_path,origin_comment,filtered_comment,filetag_count,lxr_type,path_file) values(\"")
 				.append(path)
 				.append("\",\"")
-				.append(content.replaceAll("\\\"", "\\\\\""))
+				//TODO:BUG WITH ##**##/arch/arm/kernel/kprobes-test.h/TESTCASE_END(0179)(linux-3.5.4)
+				.append(content.replaceAll("\\\\", "\\\\\\\\").replaceAll("\\\"", "\\\\\""))
 				.append("\",\"")
-				.append(filterComment(content).replaceAll("\\\"", "\\\\\""))
+				.append(filterComment(content).replaceAll("\\\\", "\\\\\\\\").replaceAll("\\\"", "\\\\\""))
 				.append("\",")
 				.append(countFileTag(content))
 				.append(",\"")
@@ -162,6 +162,7 @@ public class CommentAnalyzer {
 				.append(getCommentFileName(path))
 				.append("\");");
 			stmt.executeUpdate(sql.toString());
+			logger.info("inserted "+path);
 		}
 		
 		//Ìî³ätemplate
@@ -316,7 +317,7 @@ public class CommentAnalyzer {
 	public Map<String,String> getAllComments(boolean loadFromFile) throws SQLException, IOException{
 		Map<String,String> comments;
 		if(loadFromFile){
-			comments = TXTCommentAnalyzer.readContentToMap(new File(props.getProperty("mysql.data.DataSource.rootPath")+"allComments.txt"), props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter"));
+			comments = TXTCommentAnalyzer.readContentToMap(new File(props.getProperty("mysql.data.DataSource.rootPath")+props.getProperty("mysql.data.DataSource.allCommentsFile")), props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter"));
 		}else{
 			comments = new HashMap<String, String>();
 			Statement stmt = this.source_conn.createStatement();
