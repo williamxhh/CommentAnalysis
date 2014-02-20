@@ -98,13 +98,13 @@ public class CommentAnalyzer {
 	
 	public void closeDBConnection(){
 		try {
-			if(this.source_conn!=null&&this.source_conn.isClosed()){
+			if(this.source_conn!=null&&!this.source_conn.isClosed()){
 				source_conn.close();
 			}
-			if(this.storage_conn!=null&&this.storage_conn.isClosed()){
+			if(this.storage_conn!=null&&!this.storage_conn.isClosed()){
 				storage_conn.close();
 			}
-			if(this.lxr_conn!=null&&this.lxr_conn.isClosed()){
+			if(this.lxr_conn!=null&&!this.lxr_conn.isClosed()){
 				lxr_conn.close();
 			}
 		} catch (SQLException e) {

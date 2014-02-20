@@ -79,7 +79,7 @@ public class DataSource {
 
 	public void closeDBConnection(){
 		try {
-			if(this.conn!=null&&this.conn.isClosed()){
+			if(this.conn!=null&&!this.conn.isClosed()){
 				conn.close();
 			}
 		} catch (SQLException e) {
