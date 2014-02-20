@@ -27,9 +27,9 @@ public class TXTCommentAnalyzer {
 	private static final Logger log = Logger.getLogger(TXTCommentAnalyzer.class);
 	
 	private static Properties props = PropertiesUtil.getProperties();
-	static String ROOTPATH = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
-	static String DEFAULTPATH = ROOTPATH+props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.classifiedCommentPath","CLASSIFIED");
-	static String DEFAULTSPLITER = props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter","##**##");;
+	public static String ROOTPATH = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
+	public static String DEFAULTPATH = ROOTPATH+props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.classifiedCommentPath","CLASSIFIED");
+	public static String DEFAULTSPLITER = props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter","##**##");;
 	/**
 	 * 抽取模板策略的严格级别：
 	 * strict策略：如果有多于两条注释，那么至少在一半的注释中出现；如果只有两条注释，那么就必须2条中全部出现      （保证一定的准确率，但是召回率不保证，可能有模板未识别出来）

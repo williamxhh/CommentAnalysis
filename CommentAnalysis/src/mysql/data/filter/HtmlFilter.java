@@ -25,10 +25,10 @@ public class HtmlFilter implements FilterBase {
 		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll(" ");
 		
 		regex = "<[/]*[div][^>]*>";
-		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll("\r\n");
+		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll("");
 		
 		regex = "<[/]*[s|S]pan[^>]*>";
-		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll(" ");
+		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll("");
 		
 		regex = "<br/>";
 		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll("\r\n");
