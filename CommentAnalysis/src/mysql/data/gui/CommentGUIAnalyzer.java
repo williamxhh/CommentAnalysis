@@ -4,7 +4,6 @@ import java.awt.Color;
 import java.awt.Font;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.io.IOException;
 import java.sql.SQLException;
 import java.util.Map;
 
@@ -15,9 +14,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 
-import mysql.data.CommentClassifier;
 import mysql.data.analysis.CommentAnalyzer;
-import mysql.data.analysis.CommentStatistics;
 import mysql.data.analysisDB.entity.CommentTableInfo;
 import mysql.data.analysisDB.entity.TemplateTableInfo;
 
@@ -41,25 +38,65 @@ public class CommentGUIAnalyzer extends JFrame {
 	private JScrollPane jScrollPane2;
 	private JTextArea noTemplateCommentTextArea;
 	private JScrollPane jScrollPane3;
+	private JLabel jLabel1;
+	private JLabel jLabel2;
+	private JLabel jLabel3;
+	private JLabel jLabel4;
 	public CommentGUIAnalyzer() {
 		
 		initComponents();
 	}
 
 	private void initComponents() {
-		setBackground(Color.WHITE);
 		setTitle("源码注释分析工具");
 		setFont(new Font("Dialog", Font.PLAIN, 12));
+		setBackground(Color.white);
 		setForeground(Color.black);
 		setLayout(new GroupLayout());
 		add(getJLabel0(), new Constraints(new Leading(27, 34, 10, 10), new Leading(21, 16, 10, 450)));
 		add(getSearchPathTextField(), new Constraints(new Leading(73, 1051, 10, 10), new Leading(18, 12, 12)));
 		add(getSearchButton(), new Constraints(new Leading(1145, 10, 10), new Leading(12, 12, 12)));
-		add(getJScrollPane1(), new Constraints(new Leading(617, 507, 10, 10), new Leading(48, 238, 12, 12)));
-		add(getJScrollPane3(), new Constraints(new Leading(616, 508, 12, 12), new Leading(312, 473, 12, 12)));
-		add(getJScrollPane0(), new Constraints(new Leading(73, 512, 10, 10), new Leading(50, 236, 10, 10)));
-		add(getJScrollPane2(), new Constraints(new Leading(72, 514, 12, 12), new Leading(313, 472, 10, 10)));
+		add(getJScrollPane0(), new Constraints(new Leading(71, 512, 12, 12), new Leading(68, 236, 10, 10)));
+		add(getJScrollPane1(), new Constraints(new Leading(617, 507, 10, 10), new Leading(69, 238, 10, 10)));
+		add(getJScrollPane2(), new Constraints(new Leading(71, 514, 10, 10), new Leading(345, 472, 10, 10)));
+		add(getJScrollPane3(), new Constraints(new Leading(616, 508, 10, 10), new Leading(343, 473, 10, 10)));
+		add(getJLabel1(), new Constraints(new Leading(73, 12, 12), new Leading(46, 12, 12)));
+		add(getJLabel2(), new Constraints(new Leading(617, 12, 12), new Leading(46, 12, 12)));
+		add(getJLabel3(), new Constraints(new Leading(71, 12, 12), new Leading(319, 12, 12)));
+		add(getJLabel4(), new Constraints(new Leading(617, 12, 12), new Leading(316, 12, 12)));
 		setSize(1315, 812);
+	}
+
+	private JLabel getJLabel4() {
+		if (jLabel4 == null) {
+			jLabel4 = new JLabel();
+			jLabel4.setText("过滤模板以后的注释：");
+		}
+		return jLabel4;
+	}
+
+	private JLabel getJLabel3() {
+		if (jLabel3 == null) {
+			jLabel3 = new JLabel();
+			jLabel3.setText("原始注释：");
+		}
+		return jLabel3;
+	}
+
+	private JLabel getJLabel2() {
+		if (jLabel2 == null) {
+			jLabel2 = new JLabel();
+			jLabel2.setText("模板信息：");
+		}
+		return jLabel2;
+	}
+
+	private JLabel getJLabel1() {
+		if (jLabel1 == null) {
+			jLabel1 = new JLabel();
+			jLabel1.setText("综合信息：");
+		}
+		return jLabel1;
 	}
 
 	private JTextArea getOriginCommentTextArea() {

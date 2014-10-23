@@ -1,6 +1,8 @@
 package mysql.data.analysis.quality;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
@@ -14,6 +16,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.StringTokenizer;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -31,6 +34,7 @@ import mysql.data.util.PropertiesUtil;
 
 public class CommentsQualityAnalysis {
 	private static final Logger log = Logger.getLogger(CommentsQualityAnalysis.class);
+	private static Properties props = PropertiesUtil.getProperties();
 	
 	public static void main(String[] args)  throws IOException, SQLException{
 		log.setLevel(Level.DEBUG);
@@ -49,6 +53,7 @@ public class CommentsQualityAnalysis {
 		
 		log.info("##completeness##");
 //		cqa.completenessCommentedTypeRatio();
+		cqa.completenessFileCommentedRatio(type);
 		log.info("done");
 //		cqa.completeness(type);
 	}
@@ -98,7 +103,7 @@ public class CommentsQualityAnalysis {
 	 * @throws IOException
 	 */
 	public void validityPasteOriginSourceCode(String type) throws IOException{
-		String SourceCodePath = PropertiesUtil.getProperties().getProperty("linuxSource.dir");
+		String SourceCodePath = props.getProperty("linuxSource.dir");
 		
 		Map<String,String> comments = TXTCommentAnalyzer.readContentToMap(FileUtil.readableFile(TXTCommentAnalyzer.DEFAULTPATH + "\\validity\\noLinkAndImageMap\\CLASSIFICATION_"+type+".txt"), TXTCommentAnalyzer.DEFAULTSPLITER);
 		//将包含粘贴源码的注释写入第一个文件   *_withSourceCode
@@ -210,12 +215,17 @@ public class CommentsQualityAnalysis {
 		return leakCount;
 	}
 	
-	
+	/**
+	 * 从之前的analysisDB中获取一个单位的所有注释，然后到lxr数据库中去查询所有需要注释的注释入口，得到每一种lxr类型的注释完整度，写到CommentsAndTypesRatio_*.txt文件中
+	 * 
+	 * @throws IOException
+	 * @throws SQLException
+	 */
 	public void completenessCommentedTypeRatio() throws IOException, SQLException{
-		String spliter = PropertiesUtil.getProperties().getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter");
+		String spliter = props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter");
 		List<FileCommentTypeCount> commented = loadCommentedEntryFromDB();
 		Map<String,Integer> fileAllEntries = null;
-		PrintWriter writer = new PrintWriter(new FileWriter(PropertiesUtil.getProperties().getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.commentsTypesRatio")));
+		PrintWriter writer = new PrintWriter(new FileWriter(props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.commentsTypesRatio")));
 		String commentedFilePath = "";
 		for(FileCommentTypeCount fileCommentType:commented){
 			if(commentedFilePath.equals("")){
@@ -231,6 +241,33 @@ public class CommentsQualityAnalysis {
 				fileAllEntries = getAllEntries(commentedFilePath);
 				writer.write("\r\n\r\n" + spliter + commentedFilePath + "\r\n");
 				writer.write(fileCommentType.getLxrType() +": " + fileCommentType.getCount() + "/" + fileAllEntries.get(fileCommentType.getLxrType()) + "\r\n");
+			}
+		}
+		writer.flush();
+		writer.close();
+	}
+	
+	/**
+	 * 查询一个单位的所有注释中一种特定lxr类型的注释在各被注释文件中的注释完整度
+	 * 
+	 * @param lxrType
+	 * @throws IOException 
+	 * @throws FileNotFoundException 
+	 */
+	public void completenessFileCommentedRatio(String lxrType) throws IOException{
+		Map<String,String> typeRatioMap = TXTCommentAnalyzer.readContentToMap(new File(props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.commentsTypesRatio")), TXTCommentAnalyzer.DEFAULTSPLITER);
+		PrintWriter writer = new PrintWriter(FileUtil.writeableFile(TXTCommentAnalyzer.DEFAULTPATH+"//completenesss//fileCommentedRatioBylxrType//" + lxrType + ".csv"));
+		for(Map.Entry<String, String> entry:typeRatioMap.entrySet()){
+			if(entry.getValue().contains(lxrType)){
+				StringTokenizer st = new StringTokenizer(entry.getValue(), "\r\n");
+				while(st.hasMoreTokens()){
+					String line = st.nextToken();
+					if(line.contains(lxrType)){
+						String result = entry.getKey()+","+line.substring(line.indexOf(":")+2).replaceAll("/", ",");
+						log.debug(result);
+						writer.write(result+"\r\n");
+					}
+				}
 			}
 		}
 		writer.flush();
@@ -271,7 +308,6 @@ public class CommentsQualityAnalysis {
 	}
 	
 	public Connection connectDB(String type){
-		Properties props = PropertiesUtil.getProperties();
 		StringBuilder url = new StringBuilder();
 		if(type.equals("comment")){
 			url.append("jdbc:mysql://")

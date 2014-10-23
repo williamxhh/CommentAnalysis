@@ -23,6 +23,14 @@ import mysql.data.util.FileUtil;
 import mysql.data.util.LxrType;
 import mysql.data.util.PropertiesUtil;
 
+/**
+ * 主要是用来抽取模板
+ * @author Xiaowei GAO
+ * @date 2014年10月17日
+ * @description TODO
+ * @ClassName TXTCommentAnalyzer
+ *
+ */
 public class TXTCommentAnalyzer {
 	private static final Logger log = Logger.getLogger(TXTCommentAnalyzer.class);
 	
