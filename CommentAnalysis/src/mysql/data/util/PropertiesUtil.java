@@ -6,7 +6,8 @@ import java.io.InputStreamReader;
 import java.util.Properties;
 
 public class PropertiesUtil {
-	static final String PROPERTIESFILE = "/CommentAnalysis.properties";
+//	static final String PROPERTIESFILE = "/CommentAnalysis.properties";
+	static final String PROPERTIESFILE = "/CommentAnalysis.local.properties";
 	
 	private static Properties props = null;
 	
