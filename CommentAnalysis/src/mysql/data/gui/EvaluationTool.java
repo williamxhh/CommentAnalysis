@@ -869,6 +869,12 @@ public class EvaluationTool extends JFrame {
 	private JTextField getJTextField0() {
 		if (view_path_text_field == null) {
 			view_path_text_field = new JTextField();
+			view_path_text_field.addMouseListener(new MouseAdapter() {
+	
+				public void mouseClicked(MouseEvent event) {
+					view_path_text_fieldMouseMouseClicked(event);
+				}
+			});
 		}
 		return view_path_text_field;
 	}
@@ -1170,6 +1176,21 @@ public class EvaluationTool extends JFrame {
 	private void textFieldGotFocus(FocusEvent e) {
 		JTextField field = (JTextField)e.getSource();
 		field.selectAll();
+	}
+
+	private void view_path_text_fieldMouseMouseClicked(MouseEvent event) {
+		String selected_path = comment_path_list.getSelectedValue();
+		if(selected_path != null) {
+			if(comment_types == null) {
+				loadCommentsTypes();
+			}
+			if(comment_types.get(selected_path).equals("file")) {
+				view_path_text_field.setText(selected_path);
+			} else {
+				view_path_text_field.setText(selected_path.substring(0,selected_path.lastIndexOf("/")));
+			}
+			view_path_text_field.selectAll();
+		}
 	}
 
 }
