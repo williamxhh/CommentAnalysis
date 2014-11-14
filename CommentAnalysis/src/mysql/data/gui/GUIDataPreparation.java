@@ -9,7 +9,7 @@ import mysql.data.DataSource;
 import mysql.data.analysis.CommentAnalyzer;
 
 public class GUIDataPreparation {
-	public static void main(String[] args) throws IOException, SQLException {
+	public static void main(String[] args) throws Exception {
 		DataSource.main(args);
 		DataClean.main(args);
 		CommentClassifier.main(args);

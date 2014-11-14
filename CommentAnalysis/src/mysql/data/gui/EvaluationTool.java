@@ -522,6 +522,7 @@ public class EvaluationTool extends JFrame {
 			comment_content_text_area = new JTextArea();
 		}
 		comment_content_text_area.setEditable(false);
+		comment_content_text_area.setLineWrap(true);
 		return comment_content_text_area;
 	}
 
