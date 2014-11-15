@@ -24,6 +24,7 @@ import javax.swing.ButtonGroup;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
+import javax.swing.JEditorPane;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
@@ -63,7 +64,11 @@ public class EvaluationTool extends JFrame {
 	Map<String, JudgeTableInfo> judgeList = null;
 	String source_code_url = null;
 	FilterBase filter = null;
+	FilterBase noHtmlFilter = null;
 	EvaluationPreparation ep = null;
+	CommentAnalyzer ca = null;
+	
+	private boolean judgePanelInitialized = false;
 	
 	private JTabbedPane jTabbedPane0;
 	private JPanel viewPanel;
@@ -75,7 +80,7 @@ public class EvaluationTool extends JFrame {
 	private JScrollPane jScrollPane1;
 	private JLabel jLabel9;
 	private JLabel jLabel11;
-	private JTextArea selected_comment_text_area;
+	private JEditorPane selected_comment_jeditor_pane;
 	private JScrollPane jScrollPane2;
 	private JLabel jLabel12;
 	ButtonGroup validation_bg = new ButtonGroup();
@@ -158,12 +163,12 @@ public class EvaluationTool extends JFrame {
 		try {
 			boolean loadFromFile = true;
 			if(allComments == null) {
-				CommentAnalyzer ca = new CommentAnalyzer(loadFromFile);
+				ca = new CommentAnalyzer(loadFromFile);
 				allComments = ca.getAllComments(loadFromFile);
 			}
 			filteredComments = new HashMap<String, String>();
 			filter = new CategoryTagFilter(new HtmlFilter(new DoNothingFilter()));
-			
+			noHtmlFilter = new CategoryTagFilter(new DoNothingFilter());
 			if(comment_types == null) {
 				loadCommentsTypes();
 			}
@@ -782,7 +787,7 @@ public class EvaluationTool extends JFrame {
 	private JScrollPane getJScrollPane2() {
 		if (jScrollPane2 == null) {
 			jScrollPane2 = new JScrollPane();
-			jScrollPane2.setViewportView(getJTextArea0());
+			jScrollPane2.setViewportView(getSelectedCommentJEditorPane());
 			jScrollPane2.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
 			jScrollPane2.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		}
@@ -888,13 +893,13 @@ public class EvaluationTool extends JFrame {
 		return jScrollPane0;
 	}
 
-	private JTextArea getJTextArea0() {
-		if (selected_comment_text_area == null) {
-			selected_comment_text_area = new JTextArea();
-			selected_comment_text_area.setEditable(false);
-			selected_comment_text_area.setLineWrap(true);
+	private JEditorPane getSelectedCommentJEditorPane() {
+		if (selected_comment_jeditor_pane == null) {
+			selected_comment_jeditor_pane = new JEditorPane();
+			selected_comment_jeditor_pane.setEditable(false);
+			selected_comment_jeditor_pane.setContentType("text/html");
 		}
-		return selected_comment_text_area;
+		return selected_comment_jeditor_pane;
 	}
 
 	private JTabbedPane getJTabbedPane0() {
@@ -918,24 +923,29 @@ public class EvaluationTool extends JFrame {
 	}
 	
 	private void loadJudgeInfo() {
-		if(allComments == null) {
-			loadComments();
-		}
-		Set<String> allTypes = new HashSet<String>();
-		for(String t: comment_types.values()){
-			allTypes.add(t);
-		}
-		
-		judge_comment_type_combo_box.addItem("ALL");
-		for(String t: allTypes) {
-			judge_comment_type_combo_box.addItem(t);
-		}
-		
-		ep = new EvaluationPreparation();
-		try {
-			loadJudgeInfoFromDB();
-		} catch (HeadlessException | SQLException e) {
-			e.printStackTrace();
+		//引入一个布尔变量judgePanelInitialized， 是的judge面板只初始化一次
+		if(!judgePanelInitialized){
+			judgePanelInitialized = true;
+			
+			if(allComments == null) {
+				loadComments();
+			}
+			Set<String> allTypes = new HashSet<String>();
+			for(String t: comment_types.values()){
+				allTypes.add(t);
+			}
+			
+			judge_comment_type_combo_box.addItem("ALL");
+			for(String t: allTypes) {
+				judge_comment_type_combo_box.addItem(t);
+			}
+			
+			ep = new EvaluationPreparation();
+			try {
+				loadJudgeInfoFromDB();
+			} catch (HeadlessException | SQLException e) {
+				e.printStackTrace();
+			}
 		}
 	}
 	
@@ -1108,7 +1118,8 @@ public class EvaluationTool extends JFrame {
 			}
 			//更新注释框所显示的注释内容
 			if(selected_path != null) {
-				selected_comment_text_area.setText(filter.getText(allComments.get(selected_path)));
+//				selected_comment_jeditor_pane.setText(noHtmlFilter.getText(allComments.get(selected_path)).replaceAll("\n", "<br/>"));
+				selected_comment_jeditor_pane.setText(getColoredInfo(selected_path));
 			}
 			
 			//更新源码路径的url信息
@@ -1192,6 +1203,10 @@ public class EvaluationTool extends JFrame {
 			}
 			view_path_text_field.selectAll();
 		}
+	}
+	
+	public String getColoredInfo(String path) {
+		return ca.getColoredInfo(path);
 	}
 
 }

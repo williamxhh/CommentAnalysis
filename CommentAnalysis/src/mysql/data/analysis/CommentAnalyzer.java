@@ -44,6 +44,8 @@ import mysql.data.util.PropertiesUtil;
 public class CommentAnalyzer {
 	private static Logger logger = Logger.getLogger(CommentAnalyzer.class);
 	public static boolean LOADDATATODB = false;
+	private FilterBase seg_filter = new CategoryTagFilter(new HtmlFilter(new PunctuationFilter(new DoNothingFilter())));
+	private FilterBase seg_filter_withPunc = new CategoryTagFilter(new HtmlFilter(new DoNothingFilter()));
 	private Properties props;
 	private Connection source_conn;
 	private Connection storage_conn;
@@ -53,6 +55,7 @@ public class CommentAnalyzer {
 	private boolean loadFromFile;
 
 	public CommentAnalyzer(boolean loadFromFile) {
+		logger.setLevel(Level.WARN);
 		this.loadFromFile = loadFromFile;
 		props = PropertiesUtil.getProperties();
 		StringBuilder sourceurl = new StringBuilder();
@@ -145,6 +148,7 @@ public class CommentAnalyzer {
 		logger.setLevel(Level.INFO);
 		boolean loadFromFile = true;
 		CommentAnalyzer ca = new CommentAnalyzer(loadFromFile);
+//		LOADDATATODB = true;
 		if (LOADDATATODB) {
 			ca.loadDataToAnalysisDB();
 		}
@@ -158,9 +162,6 @@ public class CommentAnalyzer {
 		try {
 			WordSeg word_seg = new WordSeg();
 //			FilterBase seg_filter = new CategoryTagFilter(new HtmlFilter(new PunctuationFilter(new EnglishFilter(new DoNothingFilter()))));
-			FilterBase seg_filter = new CategoryTagFilter(new HtmlFilter(new PunctuationFilter(new DoNothingFilter())));
-			FilterBase seg_filter_withPunc = new CategoryTagFilter(new HtmlFilter(new DoNothingFilter()));
-			FilterBase filter = new CategoryTagFilter(new HtmlFilter((new DoNothingFilter())));
 			AlgorithmsUtil algo = new AlgorithmsUtil();
 			
 			PrintWriter writer = new PrintWriter(new File(props.getProperty("mysql.data.DataSource.rootPath") + "/" + props.getProperty("mysql.data.analysis.CommentAnalyzer.newTemplateFile")));
@@ -186,15 +187,15 @@ public class CommentAnalyzer {
 				writer.write(path + "," + comment_types.get(path).replaceAll(",", " ") + ",");
 				txtwriter.write(props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter") + "\t" + path + "\r\n");
 				
-				txtwriter.write(filter.getText(comment) + "\r\n" + props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter") + "\r\n");
+				txtwriter.write(seg_filter_withPunc.getText(comment) + "\r\n" + props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter") + "\r\n");
 				
 				Map<String, String> fileComments = getFileCommentsWithPath(path, comment_types.get(path));
 				
 				int longest_template_len = 0;
 				List<String> longest_template = null;
-				List<String> current_comment_seg = word_seg.segmentation(comment, 0, seg_filter);
+				List<String> current_comment_seg = word_seg.segmentation(comment, WordSeg.NO_POS_TAG, seg_filter);
 				for(String other_comment : fileComments.values()) {
-					List<String> comment_seg = word_seg.segmentation(other_comment, 0, seg_filter);
+					List<String> comment_seg = word_seg.segmentation(other_comment, WordSeg.NO_POS_TAG, seg_filter);
 					List<String> temp_template = algo.longestCommonString(current_comment_seg, comment_seg);
 					int len = algo.sumLen(temp_template);
 					if(len > longest_template_len) {
@@ -229,11 +230,10 @@ public class CommentAnalyzer {
 				}
 				
 				
-				
 				int nextIndex = 0;
 				int nextIndexInTemplate = 0;
 				StringBuilder template_format = new StringBuilder();
-				current_comment_seg = word_seg.segmentation(comment, 0, seg_filter_withPunc);   //此时要复现模板的效果，不过滤标点符号
+				current_comment_seg = word_seg.segmentation(comment, WordSeg.NO_POS_TAG, seg_filter_withPunc);   //此时要复现模板的效果，不过滤标点符号
 				while(nextIndex < current_comment_seg.size() && nextIndexInTemplate < longest_template.size()) {
 					if(!seg_filter.getText(current_comment_seg.get(nextIndex)).equals(longest_template.get(nextIndexInTemplate))){
 						writer.write(current_comment_seg.get(nextIndex) + ";");
@@ -375,6 +375,7 @@ public class CommentAnalyzer {
 			}
 			sql.append("\");");
 			stmt.executeUpdate(sql.toString());
+			logger.info(path);
 		}
 		
 		stmt.close();
@@ -448,17 +449,6 @@ public class CommentAnalyzer {
 		String type = "";
 
 		if (loadFromFile) {
-//			BufferedReader reader = new BufferedReader(
-//					new FileReader(
-//							props.getProperty("mysql.data.CommentClassifier.commentsAndTypes")));
-//			String oneline = "";
-//			while ((oneline = reader.readLine()) != null) {
-//				if (oneline.startsWith(line)) {
-//					break;
-//				}
-//			}
-//			reader.close();
-//			type = oneline.substring(line.length() + 1);
 			comment_types = loadCommentsTypes();
 			type = comment_types.get(line);
 		} else {
@@ -948,6 +938,78 @@ public class CommentAnalyzer {
 		rs.close();
 		stmt.close();
 		return tti;
+	}
+	
+	public String getColoredInfo(String path) {
+		StringBuilder template_format = new StringBuilder();
+		allComments = getAllComments();
+		String comment = allComments.get(path);
+		try {
+			WordSeg wordSeg = new WordSeg();
+			boolean reserveLineBreak = true;
+			List<String> current_comment_seg = wordSeg.segmentation(comment, WordSeg.NO_POS_TAG, seg_filter_withPunc, reserveLineBreak);
+			List<String> longest_template = loadNewTemplate(path);
+			
+			logger.info("#current_comment_seg#:\t" + current_comment_seg.toString());
+			logger.info("#longest_template#:\t" + longest_template.toString());
+			
+			int nextIndex = 0;
+			int nextIndexInTemplate = 0;
+			
+			while(nextIndex < current_comment_seg.size() && nextIndexInTemplate < longest_template.size()) {
+				if(!seg_filter.getText(current_comment_seg.get(nextIndex)).equals(longest_template.get(nextIndexInTemplate))){
+					template_format.append(current_comment_seg.get(nextIndex));
+					logger.info("#APPEND#:\t" + current_comment_seg.get(nextIndex));
+					++nextIndex;
+				} else {
+					template_format.append(getColorString(current_comment_seg.get(nextIndex)));
+					logger.info("#APPEND_MATCH#:\t" + getColorString(current_comment_seg.get(nextIndex)));
+					++nextIndex;
+					++nextIndexInTemplate;
+				}
+			}
+			
+			while(nextIndex < current_comment_seg.size()) {
+				template_format.append(current_comment_seg.get(nextIndex));
+				logger.info("#APPEND#:\t" + current_comment_seg.get(nextIndex));
+				++nextIndex;
+			}
+			
+			wordSeg.exit();
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return template_format.toString();
+	}
+	
+	private String getColorString(String input) {
+		StringBuilder sb = new StringBuilder();
+		sb.append("<b><font color = 'red'>").append(input).append("</font></b>");
+		return sb.toString();
+	}
+	
+	private List<String> loadNewTemplate(String path) {
+		List<String> template = new ArrayList<String>();
+		try {
+			Statement stmt = this.storage_conn.createStatement();
+			ResultSet rs = stmt.executeQuery("select new_template from new_template where path_file = \"" + path + "\"");
+			if(!rs.next()){
+				return template;
+			}
+			String[] result = rs.getString(1).split(";");
+			for(String s: result) {
+				if(s != null && !s.equals("")){
+					template.add(s);
+				}
+			}
+			rs.close();
+			stmt.close();
+			return template;
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		return template;
+		
 	}
 
 	public String getChineseComment(String commentContent) {
