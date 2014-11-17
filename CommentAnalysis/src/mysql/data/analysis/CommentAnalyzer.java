@@ -55,7 +55,6 @@ public class CommentAnalyzer {
 	private boolean loadFromFile;
 
 	public CommentAnalyzer(boolean loadFromFile) {
-		logger.setLevel(Level.WARN);
 		this.loadFromFile = loadFromFile;
 		props = PropertiesUtil.getProperties();
 		StringBuilder sourceurl = new StringBuilder();

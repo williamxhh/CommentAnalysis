@@ -18,6 +18,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 import javax.swing.ButtonGroup;
@@ -34,11 +35,17 @@ import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.JTree;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
+import javax.swing.event.TreeSelectionEvent;
+import javax.swing.event.TreeSelectionListener;
+import javax.swing.tree.DefaultMutableTreeNode;
+import javax.swing.tree.DefaultTreeModel;
+import javax.swing.tree.TreeNode;
 
 import mysql.data.analysis.CommentAnalyzer;
 import mysql.data.analysisDB.entity.JudgeTableInfo;
@@ -62,14 +69,15 @@ public class EvaluationTool extends JFrame {
 	Map<String, String> filteredComments = null;
 	Map<String, String> comment_types = null;
 	Map<String, JudgeTableInfo> judgeList = null;
+	Map<String, DefaultMutableTreeNode> pathTree = null;
 	String source_code_url = null;
 	FilterBase filter = null;
 	FilterBase noHtmlFilter = null;
 	EvaluationPreparation ep = null;
 	CommentAnalyzer ca = null;
-	
+
 	private boolean judgePanelInitialized = false;
-	
+
 	private JTabbedPane jTabbedPane0;
 	private JPanel viewPanel;
 	private JScrollPane jScrollPane0;
@@ -153,41 +161,56 @@ public class EvaluationTool extends JFrame {
 
 	private JButton score_btn;
 
-	public EvaluationTool() {
-		initComponents();
+	private JTree jTree0;
 
+	private JScrollPane jScrollPane3;
+
+	private JTextArea stat_info_jTextArea;
+
+	private JScrollPane jScrollPane5;
+
+	private JEditorPane comments_info_jEditorPane;
+
+	private JScrollPane jScrollPane4;
+
+	public EvaluationTool() {
 		loadComments();
+		initComponents();
 	}
-	
+
 	private void loadComments() {
 		try {
 			boolean loadFromFile = true;
-			if(allComments == null) {
+			if (allComments == null) {
 				ca = new CommentAnalyzer(loadFromFile);
 				allComments = ca.getAllComments(loadFromFile);
 			}
 			filteredComments = new HashMap<String, String>();
-			filter = new CategoryTagFilter(new HtmlFilter(new DoNothingFilter()));
+			filter = new CategoryTagFilter(
+					new HtmlFilter(new DoNothingFilter()));
 			noHtmlFilter = new CategoryTagFilter(new DoNothingFilter());
-			if(comment_types == null) {
+			if (comment_types == null) {
 				loadCommentsTypes();
 			}
 		} catch (SQLException | IOException e) {
 			e.printStackTrace();
 		}
 	}
-	
+
 	private void loadCommentsTypes() {
 		try {
 			comment_types = new HashMap<String, String>();
-			BufferedReader reader = new BufferedReader(new FileReader(PropertiesUtil.getProperties().getProperty("mysql.data.CommentClassifier.commentsAndTypes")));
+			BufferedReader reader = new BufferedReader(new FileReader(
+					PropertiesUtil.getProperties().getProperty(
+							"mysql.data.CommentClassifier.commentsAndTypes")));
 			String oneline = "";
-			while((oneline = reader.readLine()) != null) {
+			while ((oneline = reader.readLine()) != null) {
 				String[] splits = oneline.split(",");
-				if(splits.length == 2)
+				if (splits.length == 2)
 					comment_types.put(splits[0].trim(), splits[1].trim());
 				else
-					comment_types.put(splits[0].trim(), oneline.substring(splits[0].length() + 1));
+					comment_types.put(splits[0].trim(),
+							oneline.substring(splits[0].length() + 1));
 			}
 			reader.close();
 		} catch (FileNotFoundException e) {
@@ -200,18 +223,80 @@ public class EvaluationTool extends JFrame {
 	private void initComponents() {
 		setTitle("源代码阅读注释分析工具");
 		setLayout(new GroupLayout());
-		add(getJTabbedPane0(), new Constraints(new Bilateral(0, 0, 5), new Leading(0, 738, 12, 12)));
+		add(getJTabbedPane0(), new Constraints(new Bilateral(0, 0, 5),
+				new Leading(0, 738, 12, 12)));
 		setSize(714, 738);
 		setLocation(400, 200);
 	}
 
+	private JScrollPane getJScrollPane4() {
+		if (jScrollPane4 == null) {
+			jScrollPane4 = new JScrollPane();
+			jScrollPane4.setViewportView(getJEditorPane0());
+		}
+		return jScrollPane4;
+	}
+
+	private JEditorPane getJEditorPane0() {
+		if (comments_info_jEditorPane == null) {
+			comments_info_jEditorPane = new JEditorPane();
+			comments_info_jEditorPane.setContentType("text/html");
+		}
+		return comments_info_jEditorPane;
+	}
+
+	private JScrollPane getJScrollPane5() {
+		if (jScrollPane5 == null) {
+			jScrollPane5 = new JScrollPane();
+			jScrollPane5.setViewportView(getJTextArea0());
+		}
+		return jScrollPane5;
+	}
+
+	private JTextArea getJTextArea0() {
+		if (stat_info_jTextArea == null) {
+			stat_info_jTextArea = new JTextArea();
+		}
+		return stat_info_jTextArea;
+	}
+
+	private JScrollPane getJScrollPane3() {
+		if (jScrollPane3 == null) {
+			jScrollPane3 = new JScrollPane();
+			jScrollPane3.setViewportView(getJTree0());
+		}
+		return jScrollPane3;
+	}
+
+	private JTree getJTree0() {
+		if (jTree0 == null) {
+			jTree0 = new JTree();
+			DefaultTreeModel treeModel = null;
+
+			if (pathTree == null) {
+				buildPathTree();
+			}
+
+			treeModel = new DefaultTreeModel(pathTree.get("/"));
+			jTree0.setModel(treeModel);
+			jTree0.addTreeSelectionListener(new TreeSelectionListener() {
+
+				@Override
+				public void valueChanged(TreeSelectionEvent e) {
+					jTreeValueChanged(e);
+				}
+			});
+		}
+		return jTree0;
+	}
 
 	private JLabel getSource_code_url_label() {
 		if (source_code_url_label == null) {
 			source_code_url_label = new JLabel();
-			source_code_url_label.setText("<html><a href = ''>http://124.16.141.157/lxr-0101/source/?v=linux-3.5.4</a></html>");
+			source_code_url_label
+					.setText("<html><a href = ''>http://124.16.141.157/lxr-0101/source/?v=linux-3.5.4</a></html>");
 			source_code_url_label.addMouseListener(new MouseAdapter() {
-	
+
 				public void mouseClicked(MouseEvent event) {
 					source_code_url_labelMouseMouseClicked(event);
 				}
@@ -225,7 +310,7 @@ public class EvaluationTool extends JFrame {
 			score_btn = new JButton();
 			score_btn.setText("打  分");
 			score_btn.addMouseListener(new MouseAdapter() {
-	
+
 				public void mouseClicked(MouseEvent event) {
 					score_btnMouseMouseClicked(event);
 				}
@@ -237,12 +322,13 @@ public class EvaluationTool extends JFrame {
 	private JList<String> getJList0() {
 		if (comment_path_list == null) {
 			comment_path_list = new JList<String>();
-			comment_path_list.addListSelectionListener(new ListSelectionListener() {
-	
-				public void valueChanged(ListSelectionEvent event) {
-					comment_path_listListSelectionValueChanged(event);
-				}
-			});
+			comment_path_list
+					.addListSelectionListener(new ListSelectionListener() {
+
+						public void valueChanged(ListSelectionEvent event) {
+							comment_path_listListSelectionValueChanged(event);
+						}
+					});
 		}
 		return comment_path_list;
 	}
@@ -268,11 +354,11 @@ public class EvaluationTool extends JFrame {
 			consistency_score_text_field = new JTextField();
 			consistency_score_text_field.setText("0");
 			consistency_score_text_field.addFocusListener(new FocusListener() {
-				
+
 				@Override
 				public void focusLost(FocusEvent e) {
 				}
-				
+
 				@Override
 				public void focusGained(FocusEvent e) {
 					textFieldGotFocus(e);
@@ -295,11 +381,11 @@ public class EvaluationTool extends JFrame {
 			completeness_score_text_field = new JTextField();
 			completeness_score_text_field.setText("0");
 			completeness_score_text_field.addFocusListener(new FocusListener() {
-				
+
 				@Override
 				public void focusLost(FocusEvent e) {
 				}
-				
+
 				@Override
 				public void focusGained(FocusEvent e) {
 					textFieldGotFocus(e);
@@ -308,8 +394,6 @@ public class EvaluationTool extends JFrame {
 		}
 		return completeness_score_text_field;
 	}
-	
-	
 
 	private JLabel getJLabel14() {
 		if (jLabel14 == null) {
@@ -324,11 +408,11 @@ public class EvaluationTool extends JFrame {
 			relativity_score_text_field = new JTextField();
 			relativity_score_text_field.setText("0");
 			relativity_score_text_field.addFocusListener(new FocusListener() {
-				
+
 				@Override
 				public void focusLost(FocusEvent e) {
 				}
-				
+
 				@Override
 				public void focusGained(FocusEvent e) {
 					textFieldGotFocus(e);
@@ -342,18 +426,19 @@ public class EvaluationTool extends JFrame {
 		if (verifiability_score_text_field == null) {
 			verifiability_score_text_field = new JTextField();
 			verifiability_score_text_field.setText("0");
-			verifiability_score_text_field.addFocusListener(new FocusListener() {
-				
-				@Override
-				public void focusLost(FocusEvent e) {
-				}
-				
-				@Override
-				public void focusGained(FocusEvent e) {
-					textFieldGotFocus(e);
-				}
-			});
-			
+			verifiability_score_text_field
+					.addFocusListener(new FocusListener() {
+
+						@Override
+						public void focusLost(FocusEvent e) {
+						}
+
+						@Override
+						public void focusGained(FocusEvent e) {
+							textFieldGotFocus(e);
+						}
+					});
+
 		}
 		return verifiability_score_text_field;
 	}
@@ -363,11 +448,11 @@ public class EvaluationTool extends JFrame {
 			objectivity_score_text_field = new JTextField();
 			objectivity_score_text_field.setText("0");
 			objectivity_score_text_field.addFocusListener(new FocusListener() {
-				
+
 				@Override
 				public void focusLost(FocusEvent e) {
 				}
-				
+
 				@Override
 				public void focusGained(FocusEvent e) {
 					textFieldGotFocus(e);
@@ -382,17 +467,17 @@ public class EvaluationTool extends JFrame {
 			readability_score_text_field = new JTextField();
 			readability_score_text_field.setText("0");
 			readability_score_text_field.addFocusListener(new FocusListener() {
-				
+
 				@Override
 				public void focusLost(FocusEvent e) {
 				}
-				
+
 				@Override
 				public void focusGained(FocusEvent e) {
 					textFieldGotFocus(e);
 				}
 			});
-			
+
 		}
 		return readability_score_text_field;
 	}
@@ -402,11 +487,11 @@ public class EvaluationTool extends JFrame {
 			infomation_score_text_field = new JTextField();
 			infomation_score_text_field.setText("0");
 			infomation_score_text_field.addFocusListener(new FocusListener() {
-				
+
 				@Override
 				public void focusLost(FocusEvent e) {
 				}
-				
+
 				@Override
 				public void focusGained(FocusEvent e) {
 					textFieldGotFocus(e);
@@ -502,7 +587,7 @@ public class EvaluationTool extends JFrame {
 			judge_comment_type_combo_box.setDoubleBuffered(false);
 			judge_comment_type_combo_box.setBorder(null);
 			judge_comment_type_combo_box.addItemListener(new ItemListener() {
-	
+
 				public void itemStateChanged(ItemEvent event) {
 					judge_comment_type_combo_boxItemItemStateChanged(event);
 				}
@@ -520,7 +605,6 @@ public class EvaluationTool extends JFrame {
 		}
 		return comment_type_combo_box;
 	}
-	
 
 	private JTextArea getJTextArea2() {
 		if (comment_content_text_area == null) {
@@ -536,7 +620,7 @@ public class EvaluationTool extends JFrame {
 			comment_search_btn = new JButton();
 			comment_search_btn.setText("查  询");
 			comment_search_btn.addMouseListener(new MouseAdapter() {
-	
+
 				public void mouseClicked(MouseEvent event) {
 					comment_search_btnMouseMouseClicked(event);
 				}
@@ -545,117 +629,201 @@ public class EvaluationTool extends JFrame {
 		return comment_search_btn;
 	}
 
+	// private JPanel getJudgePanel() {
+	// if (judgePanel == null) {
+	// judgePanel = new JPanel();
+	// judgePanel.setLayout(new GroupLayout());
+	// judgePanel.add(getJScrollPane1(), new Constraints(new Leading(5, 229, 10,
+	// 10), new Leading(137, 528, 10, 10)));
+	// judgePanel.add(getJLabel9(), new Constraints(new Leading(246, 12, 12),
+	// new Leading(140, 12, 12)));
+	// judgePanel.add(getJLabel11(), new Constraints(new Leading(246, 12, 12),
+	// new Leading(166, 10, 10)));
+	// judgePanel.add(getJLabel3(), new Constraints(new Leading(15, 12, 12), new
+	// Leading(22, 12, 12)));
+	// judgePanel.add(getJudge_type_filter_btn(), new Constraints(new
+	// Leading(471, 12, 12), new Leading(17, 12, 12)));
+	// judgePanel.add(getJLabel4(), new Constraints(new Leading(19, 10, 10), new
+	// Leading(64, 12, 12)));
+	// judgePanel.add(getTotal_comment_label(), new Constraints(new Leading(39,
+	// 12, 12), new Leading(64, 12, 12)));
+	// judgePanel.add(getJLabel6(), new Constraints(new Leading(86, 12, 12), new
+	// Leading(64, 12, 12)));
+	// judgePanel.add(getJudged_comment_label(), new Constraints(new
+	// Leading(170, 12, 12), new Leading(64, 12, 12)));
+	// judgePanel.add(getJLabel8(), new Constraints(new Leading(214, 10, 10),
+	// new Leading(64, 12, 12)));
+	// judgePanel.add(getUnjudgeRadioButton(), new Constraints(new Leading(39,
+	// 12, 12), new Leading(94, 12, 12)));
+	// judgePanel.add(getJudgedRadioButton(), new Constraints(new Leading(121,
+	// 12, 12), new Leading(94, 12, 12)));
+	// judge_type_bg.add(getUnjudgeRadioButton());
+	// judge_type_bg.add(getJudgedRadioButton());
+	// judgePanel.add(getSource_code_url_label(), new Constraints(new
+	// Leading(317, 12, 12), new Leading(140, 12, 12)));
+	// judgePanel.add(getJLabel12(), new Constraints(new Leading(246, 12, 12),
+	// new Leading(526, 12, 12)));
+	// judgePanel.add(getValidRadioButton(), new Constraints(new Leading(300,
+	// 10, 10), new Leading(524, 10, 10)));
+	// judgePanel.add(getInvalidRadioButton(), new Constraints(new Leading(357,
+	// 10, 10), new Leading(524, 10, 10)));
+	// judgePanel.add(getValidationEmptyRadioButton(), new Constraints(new
+	// Leading(412, 10, 10), new Leading(524, 10, 10)));
+	// validation_bg.add(getValidRadioButton());
+	// validation_bg.add(getValidationEmptyRadioButton());
+	// validation_bg.add(getInvalidRadioButton());
+	// judgePanel.add(getJScrollPane2(), new Constraints(new Leading(246, 444,
+	// 10, 10), new Leading(192, 322, 10, 10)));
+	// judgePanel.add(getJudgeCommentTypeComboBox(), new Constraints(new
+	// Leading(82, 371, 12, 12), new Leading(18, 12, 12)));
+	// judgePanel.add(getJLabel18(), new Constraints(new Leading(246, 10, 411),
+	// new Leading(580, 12, 12)));
+	// judgePanel.add(getJLabel19(), new Constraints(new Leading(413, 10, 244),
+	// new Leading(580, 10, 110)));
+	// judgePanel.add(getJLabel20(), new Constraints(new Leading(246, 10, 411),
+	// new Leading(610, 12, 12)));
+	// judgePanel.add(getJLabel21(), new Constraints(new Leading(413, 10, 244),
+	// new Leading(610, 10, 80)));
+	// judgePanel.add(getJLabel22(), new Constraints(new Leading(246, 10, 411),
+	// new Leading(640, 12, 12)));
+	// judgePanel.add(getJLabel23(), new Constraints(new Leading(334, 10, 363),
+	// new Leading(580, 10, 110)));
+	// judgePanel.add(getJLabel24(), new Constraints(new Leading(513, 10, 184),
+	// new Leading(580, 10, 110)));
+	// judgePanel.add(getJLabel25(), new Constraints(new Leading(334, 10, 363),
+	// new Leading(610, 10, 80)));
+	// judgePanel.add(getJLabel26(), new Constraints(new Leading(513, 10, 184),
+	// new Leading(610, 10, 80)));
+	// judgePanel.add(getJLabel27(), new Constraints(new Leading(334, 10, 363),
+	// new Leading(640, 10, 50)));
+	// judgePanel.add(getJTextField3(), new Constraints(new Leading(300, 28, 10,
+	// 381), new Leading(580, 18, 10, 110)));
+	// judgePanel.add(getJTextField4(), new Constraints(new Leading(477, 28, 10,
+	// 204), new Leading(580, 18, 10, 110)));
+	// judgePanel.add(getJTextField5(), new Constraints(new Leading(300, 28, 10,
+	// 381), new Leading(610, 18, 10, 80)));
+	// judgePanel.add(getJTextField6(), new Constraints(new Leading(477, 28, 10,
+	// 204), new Leading(610, 18, 10, 80)));
+	// judgePanel.add(getJTextField7(), new Constraints(new Leading(300, 28, 10,
+	// 381), new Leading(640, 18, 10, 50)));
+	// judgePanel.add(getJLabel14(), new Constraints(new Leading(246, 10, 411),
+	// new Leading(552, 10, 10)));
+	// judgePanel.add(getJTextField1(), new Constraints(new Leading(300, 28, 12,
+	// 12), new Leading(552, 18, 10, 138)));
+	// judgePanel.add(getJLabel16(), new Constraints(new Leading(413, 12, 12),
+	// new Leading(552, 10, 138)));
+	// judgePanel.add(getJTextField2(), new Constraints(new Leading(477, 28, 12,
+	// 12), new Leading(552, 18, 10, 138)));
+	// judgePanel.add(getJLabel15(), new Constraints(new Leading(334, 12, 12),
+	// new Leading(552, 10, 138)));
+	// judgePanel.add(getJLabel17(), new Constraints(new Leading(513, 12, 12),
+	// new Leading(552, 10, 138)));
+	// judgePanel.add(getScore_btn(), new Constraints(new Leading(587, 91, 10,
+	// 10), new Leading(637, 12, 12)));
+	// }
+	// return judgePanel;
+	// }
+
 	private JPanel getReportPanel() {
 		if (reportPanel == null) {
 			reportPanel = new JPanel();
 			reportPanel.setLayout(new GroupLayout());
+			reportPanel.add(getJScrollPane3(), new Constraints(new Leading(7, 207, 10, 10), new Leading(50, 600, 10, 10)));
+			reportPanel.add(getJScrollPane5(), new Constraints(new Leading(225, 464, 10, 10), new Leading(50, 125, 10, 10)));
+			reportPanel.add(getJScrollPane4(), new Constraints(new Leading(225, 464, 12, 12), new Leading(180, 470, 12, 12)));
 		}
 		return reportPanel;
 	}
-	
-//	private JPanel getJudgePanel() {
-//		if (judgePanel == null) {
-//			judgePanel = new JPanel();
-//			judgePanel.setLayout(new GroupLayout());
-//			judgePanel.add(getJScrollPane1(), new Constraints(new Leading(5, 229, 10, 10), new Leading(137, 528, 10, 10)));
-//			judgePanel.add(getJLabel9(), new Constraints(new Leading(246, 12, 12), new Leading(140, 12, 12)));
-//			judgePanel.add(getJLabel11(), new Constraints(new Leading(246, 12, 12), new Leading(166, 10, 10)));
-//			judgePanel.add(getJLabel3(), new Constraints(new Leading(15, 12, 12), new Leading(22, 12, 12)));
-//			judgePanel.add(getJudge_type_filter_btn(), new Constraints(new Leading(471, 12, 12), new Leading(17, 12, 12)));
-//			judgePanel.add(getJLabel4(), new Constraints(new Leading(19, 10, 10), new Leading(64, 12, 12)));
-//			judgePanel.add(getTotal_comment_label(), new Constraints(new Leading(39, 12, 12), new Leading(64, 12, 12)));
-//			judgePanel.add(getJLabel6(), new Constraints(new Leading(86, 12, 12), new Leading(64, 12, 12)));
-//			judgePanel.add(getJudged_comment_label(), new Constraints(new Leading(170, 12, 12), new Leading(64, 12, 12)));
-//			judgePanel.add(getJLabel8(), new Constraints(new Leading(214, 10, 10), new Leading(64, 12, 12)));
-//			judgePanel.add(getUnjudgeRadioButton(), new Constraints(new Leading(39, 12, 12), new Leading(94, 12, 12)));
-//			judgePanel.add(getJudgedRadioButton(), new Constraints(new Leading(121, 12, 12), new Leading(94, 12, 12)));
-//			judge_type_bg.add(getUnjudgeRadioButton());
-//			judge_type_bg.add(getJudgedRadioButton());
-//			judgePanel.add(getSource_code_url_label(), new Constraints(new Leading(317, 12, 12), new Leading(140, 12, 12)));
-//			judgePanel.add(getJLabel12(), new Constraints(new Leading(246, 12, 12), new Leading(526, 12, 12)));
-//			judgePanel.add(getValidRadioButton(), new Constraints(new Leading(300, 10, 10), new Leading(524, 10, 10)));
-//			judgePanel.add(getInvalidRadioButton(), new Constraints(new Leading(357, 10, 10), new Leading(524, 10, 10)));
-//			judgePanel.add(getValidationEmptyRadioButton(), new Constraints(new Leading(412, 10, 10), new Leading(524, 10, 10)));
-//			validation_bg.add(getValidRadioButton());
-//			validation_bg.add(getValidationEmptyRadioButton());
-//			validation_bg.add(getInvalidRadioButton());
-//			judgePanel.add(getJScrollPane2(), new Constraints(new Leading(246, 444, 10, 10), new Leading(192, 322, 10, 10)));
-//			judgePanel.add(getJudgeCommentTypeComboBox(), new Constraints(new Leading(82, 371, 12, 12), new Leading(18, 12, 12)));
-//			judgePanel.add(getJLabel18(), new Constraints(new Leading(246, 10, 411), new Leading(580, 12, 12)));
-//			judgePanel.add(getJLabel19(), new Constraints(new Leading(413, 10, 244), new Leading(580, 10, 110)));
-//			judgePanel.add(getJLabel20(), new Constraints(new Leading(246, 10, 411), new Leading(610, 12, 12)));
-//			judgePanel.add(getJLabel21(), new Constraints(new Leading(413, 10, 244), new Leading(610, 10, 80)));
-//			judgePanel.add(getJLabel22(), new Constraints(new Leading(246, 10, 411), new Leading(640, 12, 12)));
-//			judgePanel.add(getJLabel23(), new Constraints(new Leading(334, 10, 363), new Leading(580, 10, 110)));
-//			judgePanel.add(getJLabel24(), new Constraints(new Leading(513, 10, 184), new Leading(580, 10, 110)));
-//			judgePanel.add(getJLabel25(), new Constraints(new Leading(334, 10, 363), new Leading(610, 10, 80)));
-//			judgePanel.add(getJLabel26(), new Constraints(new Leading(513, 10, 184), new Leading(610, 10, 80)));
-//			judgePanel.add(getJLabel27(), new Constraints(new Leading(334, 10, 363), new Leading(640, 10, 50)));
-//			judgePanel.add(getJTextField3(), new Constraints(new Leading(300, 28, 10, 381), new Leading(580, 18, 10, 110)));
-//			judgePanel.add(getJTextField4(), new Constraints(new Leading(477, 28, 10, 204), new Leading(580, 18, 10, 110)));
-//			judgePanel.add(getJTextField5(), new Constraints(new Leading(300, 28, 10, 381), new Leading(610, 18, 10, 80)));
-//			judgePanel.add(getJTextField6(), new Constraints(new Leading(477, 28, 10, 204), new Leading(610, 18, 10, 80)));
-//			judgePanel.add(getJTextField7(), new Constraints(new Leading(300, 28, 10, 381), new Leading(640, 18, 10, 50)));
-//			judgePanel.add(getJLabel14(), new Constraints(new Leading(246, 10, 411), new Leading(552, 10, 10)));
-//			judgePanel.add(getJTextField1(), new Constraints(new Leading(300, 28, 12, 12), new Leading(552, 18, 10, 138)));
-//			judgePanel.add(getJLabel16(), new Constraints(new Leading(413, 12, 12), new Leading(552, 10, 138)));
-//			judgePanel.add(getJTextField2(), new Constraints(new Leading(477, 28, 12, 12), new Leading(552, 18, 10, 138)));
-//			judgePanel.add(getJLabel15(), new Constraints(new Leading(334, 12, 12), new Leading(552, 10, 138)));
-//			judgePanel.add(getJLabel17(), new Constraints(new Leading(513, 12, 12), new Leading(552, 10, 138)));
-//			judgePanel.add(getScore_btn(), new Constraints(new Leading(587, 91, 10, 10), new Leading(637, 12, 12)));
-//		}
-//		return judgePanel;
-//	}
 
 	private JPanel getJudgePanel() {
 		if (judgePanel == null) {
 			judgePanel = new JPanel();
 			judgePanel.setLayout(new GroupLayout());
-			judgePanel.add(getJScrollPane1(), new Constraints(new Leading(5, 229, 10, 10), new Leading(137, 528, 10, 10)));
-			judgePanel.add(getJLabel11(), new Constraints(new Leading(246, 12, 12), new Leading(166, 10, 10)));
-			judgePanel.add(getJLabel3(), new Constraints(new Leading(15, 12, 12), new Leading(22, 12, 12)));
-			judgePanel.add(getJLabel4(), new Constraints(new Leading(19, 10, 10), new Leading(64, 12, 12)));
-			judgePanel.add(getTotal_comment_label(), new Constraints(new Leading(39, 12, 12), new Leading(64, 12, 12)));
-			judgePanel.add(getJLabel6(), new Constraints(new Leading(86, 12, 12), new Leading(64, 12, 12)));
-			judgePanel.add(getJudged_comment_label(), new Constraints(new Leading(170, 12, 12), new Leading(64, 12, 12)));
-			judgePanel.add(getJLabel8(), new Constraints(new Leading(214, 10, 10), new Leading(64, 12, 12)));
-			judgePanel.add(getUnjudgeRadioButton(), new Constraints(new Leading(39, 12, 12), new Leading(94, 12, 12)));
-			judgePanel.add(getJudgedRadioButton(), new Constraints(new Leading(121, 12, 12), new Leading(94, 12, 12)));
+			judgePanel.add(getJScrollPane1(), new Constraints(new Leading(5,
+					229, 10, 10), new Leading(137, 528, 10, 10)));
+			judgePanel.add(getJLabel11(), new Constraints(new Leading(246, 12,
+					12), new Leading(166, 10, 10)));
+			judgePanel.add(getJLabel3(), new Constraints(
+					new Leading(15, 12, 12), new Leading(22, 12, 12)));
+			judgePanel.add(getJLabel4(), new Constraints(
+					new Leading(19, 10, 10), new Leading(64, 12, 12)));
+			judgePanel.add(getTotal_comment_label(), new Constraints(
+					new Leading(39, 12, 12), new Leading(64, 12, 12)));
+			judgePanel.add(getJLabel6(), new Constraints(
+					new Leading(86, 12, 12), new Leading(64, 12, 12)));
+			judgePanel.add(getJudged_comment_label(), new Constraints(
+					new Leading(170, 12, 12), new Leading(64, 12, 12)));
+			judgePanel.add(getJLabel8(), new Constraints(new Leading(214, 10,
+					10), new Leading(64, 12, 12)));
+			judgePanel.add(getUnjudgeRadioButton(), new Constraints(
+					new Leading(39, 12, 12), new Leading(94, 12, 12)));
+			judgePanel.add(getJudgedRadioButton(), new Constraints(new Leading(
+					121, 12, 12), new Leading(94, 12, 12)));
 			judge_type_bg.add(getUnjudgeRadioButton());
 			judge_type_bg.add(getJudgedRadioButton());
-			judgePanel.add(getJLabel12(), new Constraints(new Leading(246, 12, 12), new Leading(526, 12, 12)));
-			judgePanel.add(getValidRadioButton(), new Constraints(new Leading(300, 10, 10), new Leading(524, 10, 10)));
-			judgePanel.add(getInvalidRadioButton(), new Constraints(new Leading(357, 10, 10), new Leading(524, 10, 10)));
-			judgePanel.add(getValidationEmptyRadioButton(), new Constraints(new Leading(412, 10, 10), new Leading(524, 10, 10)));
+			judgePanel.add(getJLabel12(), new Constraints(new Leading(246, 12,
+					12), new Leading(526, 12, 12)));
+			judgePanel.add(getValidRadioButton(), new Constraints(new Leading(
+					300, 10, 10), new Leading(524, 10, 10)));
+			judgePanel.add(getInvalidRadioButton(), new Constraints(
+					new Leading(357, 10, 10), new Leading(524, 10, 10)));
+			judgePanel.add(getValidationEmptyRadioButton(), new Constraints(
+					new Leading(412, 10, 10), new Leading(524, 10, 10)));
 			validation_bg.add(getValidRadioButton());
 			validation_bg.add(getValidationEmptyRadioButton());
 			validation_bg.add(getInvalidRadioButton());
-			judgePanel.add(getJScrollPane2(), new Constraints(new Leading(246, 444, 10, 10), new Leading(192, 322, 10, 10)));
-			judgePanel.add(getJLabel18(), new Constraints(new Leading(246, 10, 411), new Leading(580, 12, 12)));
-			judgePanel.add(getJLabel19(), new Constraints(new Leading(413, 10, 244), new Leading(580, 10, 110)));
-			judgePanel.add(getJLabel20(), new Constraints(new Leading(246, 10, 411), new Leading(610, 12, 12)));
-			judgePanel.add(getJLabel21(), new Constraints(new Leading(413, 10, 244), new Leading(610, 10, 80)));
-			judgePanel.add(getJLabel22(), new Constraints(new Leading(246, 10, 411), new Leading(640, 12, 12)));
-			judgePanel.add(getJLabel23(), new Constraints(new Leading(334, 10, 363), new Leading(580, 10, 110)));
-			judgePanel.add(getJLabel24(), new Constraints(new Leading(513, 10, 184), new Leading(580, 10, 110)));
-			judgePanel.add(getJLabel25(), new Constraints(new Leading(334, 10, 363), new Leading(610, 10, 80)));
-			judgePanel.add(getJLabel26(), new Constraints(new Leading(513, 10, 184), new Leading(610, 10, 80)));
-			judgePanel.add(getJLabel27(), new Constraints(new Leading(334, 10, 363), new Leading(640, 10, 50)));
-			judgePanel.add(getJTextField3(), new Constraints(new Leading(300, 28, 10, 381), new Leading(580, 18, 10, 110)));
-			judgePanel.add(getJTextField4(), new Constraints(new Leading(477, 28, 10, 204), new Leading(580, 18, 10, 110)));
-			judgePanel.add(getJTextField5(), new Constraints(new Leading(300, 28, 10, 381), new Leading(610, 18, 10, 80)));
-			judgePanel.add(getJTextField6(), new Constraints(new Leading(477, 28, 10, 204), new Leading(610, 18, 10, 80)));
-			judgePanel.add(getJTextField7(), new Constraints(new Leading(300, 28, 10, 381), new Leading(640, 18, 10, 50)));
-			judgePanel.add(getJLabel14(), new Constraints(new Leading(246, 10, 411), new Leading(552, 10, 10)));
-			judgePanel.add(getJTextField1(), new Constraints(new Leading(300, 28, 12, 12), new Leading(552, 18, 10, 138)));
-			judgePanel.add(getJLabel16(), new Constraints(new Leading(413, 12, 12), new Leading(552, 10, 138)));
-			judgePanel.add(getJTextField2(), new Constraints(new Leading(477, 28, 12, 12), new Leading(552, 18, 10, 138)));
-			judgePanel.add(getJLabel15(), new Constraints(new Leading(334, 12, 12), new Leading(552, 10, 138)));
-			judgePanel.add(getJLabel17(), new Constraints(new Leading(513, 12, 12), new Leading(552, 10, 138)));
-			judgePanel.add(getScore_btn(), new Constraints(new Leading(587, 91, 10, 10), new Leading(637, 12, 12)));
-			judgePanel.add(getJudgeCommentTypeComboBox(), new Constraints(new Leading(82, 604, 10, 10), new Leading(18, 12, 12)));
-			judgePanel.add(getJLabel9(), new Constraints(new Leading(246, 12, 12), new Leading(126, 12, 12)));
-			judgePanel.add(getSource_code_url_label(), new Constraints(new Leading(246, 12, 12), new Leading(146, 10, 10)));
+			judgePanel.add(getJScrollPane2(), new Constraints(new Leading(246,
+					444, 10, 10), new Leading(192, 322, 10, 10)));
+			judgePanel.add(getJLabel18(), new Constraints(new Leading(246, 10,
+					411), new Leading(580, 12, 12)));
+			judgePanel.add(getJLabel19(), new Constraints(new Leading(413, 10,
+					244), new Leading(580, 10, 110)));
+			judgePanel.add(getJLabel20(), new Constraints(new Leading(246, 10,
+					411), new Leading(610, 12, 12)));
+			judgePanel.add(getJLabel21(), new Constraints(new Leading(413, 10,
+					244), new Leading(610, 10, 80)));
+			judgePanel.add(getJLabel22(), new Constraints(new Leading(246, 10,
+					411), new Leading(640, 12, 12)));
+			judgePanel.add(getJLabel23(), new Constraints(new Leading(334, 10,
+					363), new Leading(580, 10, 110)));
+			judgePanel.add(getJLabel24(), new Constraints(new Leading(513, 10,
+					184), new Leading(580, 10, 110)));
+			judgePanel.add(getJLabel25(), new Constraints(new Leading(334, 10,
+					363), new Leading(610, 10, 80)));
+			judgePanel.add(getJLabel26(), new Constraints(new Leading(513, 10,
+					184), new Leading(610, 10, 80)));
+			judgePanel.add(getJLabel27(), new Constraints(new Leading(334, 10,
+					363), new Leading(640, 10, 50)));
+			judgePanel.add(getJTextField3(), new Constraints(new Leading(300,
+					28, 10, 381), new Leading(580, 18, 10, 110)));
+			judgePanel.add(getJTextField4(), new Constraints(new Leading(477,
+					28, 10, 204), new Leading(580, 18, 10, 110)));
+			judgePanel.add(getJTextField5(), new Constraints(new Leading(300,
+					28, 10, 381), new Leading(610, 18, 10, 80)));
+			judgePanel.add(getJTextField6(), new Constraints(new Leading(477,
+					28, 10, 204), new Leading(610, 18, 10, 80)));
+			judgePanel.add(getJTextField7(), new Constraints(new Leading(300,
+					28, 10, 381), new Leading(640, 18, 10, 50)));
+			judgePanel.add(getJLabel14(), new Constraints(new Leading(246, 10,
+					411), new Leading(552, 10, 10)));
+			judgePanel.add(getJTextField1(), new Constraints(new Leading(300,
+					28, 12, 12), new Leading(552, 18, 10, 138)));
+			judgePanel.add(getJLabel16(), new Constraints(new Leading(413, 12,
+					12), new Leading(552, 10, 138)));
+			judgePanel.add(getJTextField2(), new Constraints(new Leading(477,
+					28, 12, 12), new Leading(552, 18, 10, 138)));
+			judgePanel.add(getJLabel15(), new Constraints(new Leading(334, 12,
+					12), new Leading(552, 10, 138)));
+			judgePanel.add(getJLabel17(), new Constraints(new Leading(513, 12,
+					12), new Leading(552, 10, 138)));
+			judgePanel.add(getScore_btn(), new Constraints(new Leading(587, 91,
+					10, 10), new Leading(637, 12, 12)));
+			judgePanel.add(getJudgeCommentTypeComboBox(), new Constraints(
+					new Leading(82, 604, 10, 10), new Leading(18, 12, 12)));
+			judgePanel.add(getJLabel9(), new Constraints(new Leading(246, 12,
+					12), new Leading(126, 12, 12)));
+			judgePanel.add(getSource_code_url_label(), new Constraints(
+					new Leading(246, 12, 12), new Leading(146, 10, 10)));
 		}
 		return judgePanel;
 	}
@@ -665,10 +833,10 @@ public class EvaluationTool extends JFrame {
 			judge_type_judged_ratio_btn = new JRadioButton();
 			judge_type_judged_ratio_btn.setText("已评阅");
 			judge_type_judged_ratio_btn.addActionListener(new ActionListener() {
-				
+
 				@Override
 				public void actionPerformed(ActionEvent e) {
-					jRadioButtonActionActionPerformed(e);					
+					jRadioButtonActionActionPerformed(e);
 				}
 			});
 		}
@@ -680,13 +848,14 @@ public class EvaluationTool extends JFrame {
 			judge_type_unjudge_ratio_btn = new JRadioButton();
 			judge_type_unjudge_ratio_btn.setText("未评阅");
 			judge_type_unjudge_ratio_btn.setSelected(true);
-			judge_type_unjudge_ratio_btn.addActionListener(new ActionListener() {
-				
-				@Override
-				public void actionPerformed(ActionEvent e) {
-					jRadioButtonActionActionPerformed(e);					
-				}
-			});
+			judge_type_unjudge_ratio_btn
+					.addActionListener(new ActionListener() {
+
+						@Override
+						public void actionPerformed(ActionEvent e) {
+							jRadioButtonActionActionPerformed(e);
+						}
+					});
 		}
 		return judge_type_unjudge_ratio_btn;
 	}
@@ -736,10 +905,10 @@ public class EvaluationTool extends JFrame {
 			validation_empty_radio_btn = new JRadioButton();
 			validation_empty_radio_btn.setText("待评");
 			validation_empty_radio_btn.addActionListener(new ActionListener() {
-				
+
 				@Override
 				public void actionPerformed(ActionEvent e) {
-					jRadioButtonActionActionPerformed(e);					
+					jRadioButtonActionActionPerformed(e);
 				}
 			});
 		}
@@ -750,13 +919,14 @@ public class EvaluationTool extends JFrame {
 		if (validation_invalid_radio_btn == null) {
 			validation_invalid_radio_btn = new JRadioButton();
 			validation_invalid_radio_btn.setText("无效");
-			validation_invalid_radio_btn.addActionListener(new ActionListener() {
-				
-				@Override
-				public void actionPerformed(ActionEvent e) {
-					jRadioButtonActionActionPerformed(e);					
-				}
-			});
+			validation_invalid_radio_btn
+					.addActionListener(new ActionListener() {
+
+						@Override
+						public void actionPerformed(ActionEvent e) {
+							jRadioButtonActionActionPerformed(e);
+						}
+					});
 		}
 		return validation_invalid_radio_btn;
 	}
@@ -766,10 +936,10 @@ public class EvaluationTool extends JFrame {
 			validation_valid_radio_btn = new JRadioButton();
 			validation_valid_radio_btn.setText("有效");
 			validation_valid_radio_btn.addActionListener(new ActionListener() {
-				
+
 				@Override
 				public void actionPerformed(ActionEvent e) {
-					jRadioButtonActionActionPerformed(e);					
+					jRadioButtonActionActionPerformed(e);
 				}
 			});
 		}
@@ -788,8 +958,10 @@ public class EvaluationTool extends JFrame {
 		if (jScrollPane2 == null) {
 			jScrollPane2 = new JScrollPane();
 			jScrollPane2.setViewportView(getSelectedCommentJEditorPane());
-			jScrollPane2.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
-			jScrollPane2.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+			jScrollPane2
+					.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+			jScrollPane2
+					.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
 		}
 		return jScrollPane2;
 	}
@@ -822,13 +994,20 @@ public class EvaluationTool extends JFrame {
 		if (viewPanel == null) {
 			viewPanel = new JPanel();
 			viewPanel.setLayout(new GroupLayout());
-			viewPanel.add(getJTextField0(), new Constraints(new Leading(118, 378, 10, 10), new Leading(25, 12, 12)));
-			viewPanel.add(getJLabel1(), new Constraints(new Leading(39, 12, 12), new Leading(65, 12, 12)));
-			viewPanel.add(getJLabel0(), new Constraints(new Leading(39, 12, 12), new Leading(27, 12, 12)));
-			viewPanel.add(getJButton1(), new Constraints(new Leading(519, 12, 12), new Leading(65, 12, 12)));
-			viewPanel.add(getJButton2(), new Constraints(new Leading(519, 12, 12), new Leading(22, 12, 12)));
-			viewPanel.add(getCommentTypeComboBox(), new Constraints(new Leading(116, 380, 12, 12), new Leading(62, 12, 12)));
-			viewPanel.add(getJScrollPane0(), new Constraints(new Bilateral(0, 0, 22), new Leading(116, 594, 10, 10)));
+			viewPanel.add(getJTextField0(), new Constraints(new Leading(118,
+					378, 10, 10), new Leading(25, 12, 12)));
+			viewPanel.add(getJLabel1(), new Constraints(
+					new Leading(39, 12, 12), new Leading(65, 12, 12)));
+			viewPanel.add(getJLabel0(), new Constraints(
+					new Leading(39, 12, 12), new Leading(27, 12, 12)));
+			viewPanel.add(getJButton1(), new Constraints(new Leading(519, 12,
+					12), new Leading(65, 12, 12)));
+			viewPanel.add(getJButton2(), new Constraints(new Leading(519, 12,
+					12), new Leading(22, 12, 12)));
+			viewPanel.add(getCommentTypeComboBox(), new Constraints(
+					new Leading(116, 380, 12, 12), new Leading(62, 12, 12)));
+			viewPanel.add(getJScrollPane0(), new Constraints(new Bilateral(0,
+					0, 22), new Leading(116, 594, 10, 10)));
 		}
 		return viewPanel;
 	}
@@ -857,13 +1036,12 @@ public class EvaluationTool extends JFrame {
 		return jLabel1;
 	}
 
-
 	private JButton getJButton1() {
 		if (comment_filter_btn == null) {
 			comment_filter_btn = new JButton();
 			comment_filter_btn.setText("过  滤");
 			comment_filter_btn.addMouseListener(new MouseAdapter() {
-	
+
 				public void mouseClicked(MouseEvent event) {
 					comment_filter_btnMouseMouseClicked(event);
 				}
@@ -876,7 +1054,7 @@ public class EvaluationTool extends JFrame {
 		if (view_path_text_field == null) {
 			view_path_text_field = new JTextField();
 			view_path_text_field.addMouseListener(new MouseAdapter() {
-	
+
 				public void mouseClicked(MouseEvent event) {
 					view_path_text_fieldMouseMouseClicked(event);
 				}
@@ -909,37 +1087,38 @@ public class EvaluationTool extends JFrame {
 			jTabbedPane0.addTab("评阅注释", getJudgePanel());
 			jTabbedPane0.addTab("质量报告", getReportPanel());
 			jTabbedPane0.addChangeListener(new ChangeListener() {
-				
+
 				@Override
 				public void stateChanged(ChangeEvent e) {
 					JTabbedPane tabbedPane = (JTabbedPane) e.getSource();
-					if(tabbedPane.getSelectedComponent().equals(getJudgePanel())){
-						 loadJudgeInfo();
+					if (tabbedPane.getSelectedComponent().equals(
+							getJudgePanel())) {
+						loadJudgeInfo();
 					}
 				}
 			});
 		}
 		return jTabbedPane0;
 	}
-	
+
 	private void loadJudgeInfo() {
-		//引入一个布尔变量judgePanelInitialized， 是的judge面板只初始化一次
-		if(!judgePanelInitialized){
+		// 引入一个布尔变量judgePanelInitialized， 是的judge面板只初始化一次
+		if (!judgePanelInitialized) {
 			judgePanelInitialized = true;
-			
-			if(allComments == null) {
+
+			if (allComments == null) {
 				loadComments();
 			}
 			Set<String> allTypes = new HashSet<String>();
-			for(String t: comment_types.values()){
+			for (String t : comment_types.values()) {
 				allTypes.add(t);
 			}
-			
+
 			judge_comment_type_combo_box.addItem("ALL");
-			for(String t: allTypes) {
+			for (String t : allTypes) {
 				judge_comment_type_combo_box.addItem(t);
 			}
-			
+
 			ep = new EvaluationPreparation();
 			try {
 				loadJudgeInfoFromDB();
@@ -948,21 +1127,21 @@ public class EvaluationTool extends JFrame {
 			}
 		}
 	}
-	
+
 	private void loadJudgeInfoFromDB() throws HeadlessException, SQLException {
-		if(!ep.hasJudgeInfo()){
+		if (!ep.hasJudgeInfo()) {
 			ep.insertAllPathToJudgeDB(allComments.keySet());
 		}
-		
-		if(judgeList == null) {
+
+		if (judgeList == null) {
 			judgeList = ep.loadJudgeInfoFromDB();
 		}
-		
+
 		updateCommentPathList(0, "ALL");
 	}
 
 	public static void main(String[] args) throws Exception {
-//		BeautyEyeLNFHelper.launchBeautyEyeLNF();
+		// BeautyEyeLNFHelper.launchBeautyEyeLNF();
 		JFrame frame = new EvaluationTool();
 		frame.setVisible(true);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -970,41 +1149,45 @@ public class EvaluationTool extends JFrame {
 
 	private void comment_search_btnMouseMouseClicked(MouseEvent event) {
 		String path = view_path_text_field.getText();
-		
-		if(path.length() != 0){
+
+		if (path.length() != 0) {
 			comment_type_combo_box.setEnabled(true);
 			comment_type_combo_box.removeAllItems();
-			
+
 			filteredComments.clear();
-			
+
 			Set<String> types = new HashSet<String>();
-			StringBuilder content = new StringBuilder(); 
-			for(Map.Entry<String, String> entry: allComments.entrySet()) {
-				if(entry.getKey().startsWith(path)) {
+			StringBuilder content = new StringBuilder();
+			for (Map.Entry<String, String> entry : allComments.entrySet()) {
+				if (entry.getKey().startsWith(path)) {
 					filteredComments.put(entry.getKey(), entry.getValue());
 					types.add(comment_types.get(entry.getKey()));
-					content.append("###################   " + entry.getKey() + "   ###################\r\n" + filter.getText(entry.getValue()) + "\r\n\r\n");
+					content.append("###################   " + entry.getKey()
+							+ "   ###################\r\n"
+							+ filter.getText(entry.getValue()) + "\r\n\r\n");
 				}
 			}
-			
+
 			comment_content_text_area.setText(content.toString());
-			for(String t : types){
+			for (String t : types) {
 				comment_type_combo_box.addItem(t);
 			}
 		}
 	}
 
 	private void comment_filter_btnMouseMouseClicked(MouseEvent event) {
-		if(comment_type_combo_box.getSelectedItem() != null){
+		if (comment_type_combo_box.getSelectedItem() != null) {
 			String type = comment_type_combo_box.getSelectedItem().toString();
 			StringBuilder content = new StringBuilder();
-			
-			for(Map.Entry<String, String> entry: filteredComments.entrySet()) {
-				if(comment_types.get(entry.getKey()).equals(type)) {
-					content.append("###################   " + entry.getKey() + "   ###################\r\n" + filter.getText(entry.getValue()) + "\r\n\r\n");
+
+			for (Map.Entry<String, String> entry : filteredComments.entrySet()) {
+				if (comment_types.get(entry.getKey()).equals(type)) {
+					content.append("###################   " + entry.getKey()
+							+ "   ###################\r\n"
+							+ filter.getText(entry.getValue()) + "\r\n\r\n");
 				}
 			}
-			
+
 			comment_content_text_area.setText(content.toString());
 		}
 	}
@@ -1012,22 +1195,29 @@ public class EvaluationTool extends JFrame {
 	private void score_btnMouseMouseClicked(MouseEvent event) {
 		String selected_path = comment_path_list.getSelectedValue();
 		JudgeTableInfo jti = judgeList.get(selected_path);
-		if(validation_empty_radio_btn.isSelected()){
+		if (validation_empty_radio_btn.isSelected()) {
 			jti.setValidation_state(0);
-		}else if(validation_invalid_radio_btn.isSelected()) {
+		} else if (validation_invalid_radio_btn.isSelected()) {
 			jti.setValidation_state(-1);
-		}else if(validation_valid_radio_btn.isSelected()) {
+		} else if (validation_valid_radio_btn.isSelected()) {
 			jti.setValidation_state(1);
 		}
-		
-		jti.setCompleteness_score(Integer.parseInt(completeness_score_text_field.getText()));
-		jti.setConsistency_score(Integer.parseInt(consistency_score_text_field.getText()));
-		jti.setInformation_score(Integer.parseInt(infomation_score_text_field.getText()));
-		jti.setReadability_score(Integer.parseInt(readability_score_text_field.getText()));
-		jti.setObjectivity_score(Integer.parseInt(objectivity_score_text_field.getText()));
-		jti.setVerifiability_score(Integer.parseInt(verifiability_score_text_field.getText()));
-		jti.setRelativity_score(Integer.parseInt(relativity_score_text_field.getText()));
-		
+
+		jti.setCompleteness_score(Integer
+				.parseInt(completeness_score_text_field.getText()));
+		jti.setConsistency_score(Integer.parseInt(consistency_score_text_field
+				.getText()));
+		jti.setInformation_score(Integer.parseInt(infomation_score_text_field
+				.getText()));
+		jti.setReadability_score(Integer.parseInt(readability_score_text_field
+				.getText()));
+		jti.setObjectivity_score(Integer.parseInt(objectivity_score_text_field
+				.getText()));
+		jti.setVerifiability_score(Integer
+				.parseInt(verifiability_score_text_field.getText()));
+		jti.setRelativity_score(Integer.parseInt(relativity_score_text_field
+				.getText()));
+
 		try {
 			ep.updateJudgeInfo(jti);
 		} catch (SQLException e) {
@@ -1035,140 +1225,166 @@ public class EvaluationTool extends JFrame {
 		}
 	}
 
-
 	private void jRadioButtonActionActionPerformed(ActionEvent event) {
 		Object source = event.getSource();
-		
-		
-		if(source == judge_type_judged_ratio_btn) {
-			String type = judge_comment_type_combo_box.getSelectedItem().toString();
-			if(type == null){
+
+		if (source == judge_type_judged_ratio_btn) {
+			String type = judge_comment_type_combo_box.getSelectedItem()
+					.toString();
+			if (type == null) {
 				updateCommentPathList(1, "ALL");
-			}else {
+			} else {
 				updateCommentPathList(1, type);
 			}
-		} else if(source == judge_type_unjudge_ratio_btn) {
-			String type = judge_comment_type_combo_box.getSelectedItem().toString();
-			if(type == null){
+		} else if (source == judge_type_unjudge_ratio_btn) {
+			String type = judge_comment_type_combo_box.getSelectedItem()
+					.toString();
+			if (type == null) {
 				updateCommentPathList(0, "ALL");
-			}else {
+			} else {
 				updateCommentPathList(0, type);
 			}
-		} else if(source == validation_empty_radio_btn) {
-//			setTitle(((JRadioButton)source).getText());
-		} else if(source == validation_valid_radio_btn) {
-//			setTitle(((JRadioButton)source).getText());
-		} else if(source == validation_invalid_radio_btn) {
-//			setTitle(((JRadioButton)source).getText());
+		} else if (source == validation_empty_radio_btn) {
+			// setTitle(((JRadioButton)source).getText());
+		} else if (source == validation_valid_radio_btn) {
+			// setTitle(((JRadioButton)source).getText());
+		} else if (source == validation_invalid_radio_btn) {
+			// setTitle(((JRadioButton)source).getText());
 		}
 	}
-	
+
 	/**
 	 * 
-	 * @param state  0表示未评价，1表示已评价
-	 * @param comment_type  ALL表示全部类型，其他的指定特定的类型
+	 * @param state
+	 *            0表示未评价，1表示已评价
+	 * @param comment_type
+	 *            ALL表示全部类型，其他的指定特定的类型
 	 */
 	private void updateCommentPathList(int state, String comment_type) {
 		int total_comment_count = 0;
 		int judged_comment_count = 0;
-		
-		if(judgeList != null) {
+
+		if (judgeList != null) {
 			DefaultListModel<String> listModel = new DefaultListModel<String>();
 			TreeSet<JudgeTableInfo> list = new TreeSet<JudgeTableInfo>();
-			for(JudgeTableInfo jti: judgeList.values()){
+			for (JudgeTableInfo jti : judgeList.values()) {
 				list.add(jti);
 			}
-			for(JudgeTableInfo jti: list) {
-				if(state == 0) {
-					if(comment_types.get(jti.getComment_path()).equals(comment_type) || comment_type.equals("ALL")){
+			for (JudgeTableInfo jti : list) {
+				if (state == 0) {
+					if (comment_types.get(jti.getComment_path()).equals(
+							comment_type)
+							|| comment_type.equals("ALL")) {
 						++total_comment_count;
-						if(jti.getValidation_state() == 0) {
+						if (jti.getValidation_state() == 0) {
 							listModel.addElement(jti.getComment_path());
 						} else {
 							++judged_comment_count;
 						}
 					}
-				} else if(state == 1) {
-					if(comment_types.get(jti.getComment_path()).equals(comment_type) || comment_type.equals("ALL")){
+				} else if (state == 1) {
+					if (comment_types.get(jti.getComment_path()).equals(
+							comment_type)
+							|| comment_type.equals("ALL")) {
 						++total_comment_count;
-						if(jti.getValidation_state() != 0) {
+						if (jti.getValidation_state() != 0) {
 							++judged_comment_count;
 							listModel.addElement(jti.getComment_path());
 						}
 					}
 				}
 			}
-			
+
 			comment_path_list.setModel(listModel);
 			total_comment_label.setText(total_comment_count + "");
 			judged_comment_label.setText(judged_comment_count + "");
 		}
 	}
-	
+
 	private String getLineNo(String path) {
-		return path.substring(path.indexOf("(") + 1,path.indexOf(")"));
+		return path.substring(path.indexOf("(") + 1, path.indexOf(")"));
 	}
 
-	private void comment_path_listListSelectionValueChanged(ListSelectionEvent event) {
+	private void comment_path_listListSelectionValueChanged(
+			ListSelectionEvent event) {
 		@SuppressWarnings("unchecked")
-		String selected_path = ((JList<String>)event.getSource()).getSelectedValue();
-		if(selected_path != null) {
-			if(allComments == null) {
+		String selected_path = ((JList<String>) event.getSource())
+				.getSelectedValue();
+		if (selected_path != null) {
+			if (allComments == null) {
 				loadComments();
 			}
-			//更新注释框所显示的注释内容
-			if(selected_path != null) {
-//				selected_comment_jeditor_pane.setText(noHtmlFilter.getText(allComments.get(selected_path)).replaceAll("\n", "<br/>"));
-				selected_comment_jeditor_pane.setText(getColoredInfo(selected_path));
+			// 更新注释框所显示的注释内容
+			if (selected_path != null) {
+				// selected_comment_jeditor_pane.setText(noHtmlFilter.getText(allComments.get(selected_path)).replaceAll("\n",
+				// "<br/>"));
+				selected_comment_jeditor_pane
+						.setText(getColoredInfo(selected_path));
 			}
-			
-			//更新源码路径的url信息
-			if(comment_types.get(selected_path).equals("file")) {
-				update_source_code_url_label_text(selected_path,"-1");
+
+			// 更新源码路径的url信息
+			if (comment_types.get(selected_path).equals("file")) {
+				update_source_code_url_label_text(selected_path, "-1");
 			} else {
-				update_source_code_url_label_text(selected_path.substring(0,selected_path.lastIndexOf("/")),getLineNo(selected_path));
+				update_source_code_url_label_text(
+						selected_path.substring(0,
+								selected_path.lastIndexOf("/")),
+						getLineNo(selected_path));
 			}
-			
+
 			JudgeTableInfo selected_judge_info = judgeList.get(selected_path);
 
 			// 0表示未评， -1表示无效，1表示有效
 			int validation_state = selected_judge_info.getValidation_state();
-			if(validation_state == 0) {
+			if (validation_state == 0) {
 				getValidationEmptyRadioButton().setSelected(true);
-			} else if(validation_state == 1) {
+			} else if (validation_state == 1) {
 				getValidRadioButton().setSelected(true);
-			} else if(validation_state == -1) {
+			} else if (validation_state == -1) {
 				getInvalidRadioButton().setSelected(true);
 			}
-			
-			completeness_score_text_field.setText(selected_judge_info.getCompleteness_score() + "");
-			consistency_score_text_field.setText(selected_judge_info.getConsistency_score() + "");
-			infomation_score_text_field.setText(selected_judge_info.getInformation_score() + "");
-			readability_score_text_field.setText(selected_judge_info.getReadability_score() + "");
-			objectivity_score_text_field.setText(selected_judge_info.getObjectivity_score() + "");
-			verifiability_score_text_field.setText(selected_judge_info.getVerifiability_score() + "");
-			relativity_score_text_field.setText(selected_judge_info.getRelativity_score() + "");
+
+			completeness_score_text_field.setText(selected_judge_info
+					.getCompleteness_score() + "");
+			consistency_score_text_field.setText(selected_judge_info
+					.getConsistency_score() + "");
+			infomation_score_text_field.setText(selected_judge_info
+					.getInformation_score() + "");
+			readability_score_text_field.setText(selected_judge_info
+					.getReadability_score() + "");
+			objectivity_score_text_field.setText(selected_judge_info
+					.getObjectivity_score() + "");
+			verifiability_score_text_field.setText(selected_judge_info
+					.getVerifiability_score() + "");
+			relativity_score_text_field.setText(selected_judge_info
+					.getRelativity_score() + "");
 		}
 	}
-	
-	private void update_source_code_url_label_text(String filename, String lineNo) {
+
+	private void update_source_code_url_label_text(String filename,
+			String lineNo) {
 		StringBuilder url = new StringBuilder();
-		url.append(PropertiesUtil.getProperties().getProperty("mysql.data.gui.EvaluationTool.sourcecode_url_prefix"));
+		url.append(PropertiesUtil.getProperties().getProperty(
+				"mysql.data.gui.EvaluationTool.sourcecode_url_prefix"));
 		url.append(filename);
-		url.append(PropertiesUtil.getProperties().getProperty("mysql.data.gui.EvaluationTool.sourcecode_url_version"));
-		if(!lineNo.equals("-1")) {
+		url.append(PropertiesUtil.getProperties().getProperty(
+				"mysql.data.gui.EvaluationTool.sourcecode_url_version"));
+		if (!lineNo.equals("-1")) {
 			url.append("#").append(lineNo);
 		}
 		source_code_url = url.toString();
-		
-		source_code_url_label.setText("<html><a href = ''>" + source_code_url + "</a></html>");
+
+		source_code_url_label.setText("<html><a href = ''>" + source_code_url
+				+ "</a></html>");
 	}
 
-	private void judge_comment_type_combo_boxItemItemStateChanged(ItemEvent event) {
+	private void judge_comment_type_combo_boxItemItemStateChanged(
+			ItemEvent event) {
 		@SuppressWarnings("unchecked")
-		String selected_type = ((JComboBox<String>)event.getSource()).getSelectedItem().toString();
+		String selected_type = ((JComboBox<String>) event.getSource())
+				.getSelectedItem().toString();
 		boolean unjudged = judge_type_unjudge_ratio_btn.isSelected();
-		if(unjudged) {
+		if (unjudged) {
 			updateCommentPathList(0, selected_type);
 		} else {
 			updateCommentPathList(1, selected_type);
@@ -1177,36 +1393,115 @@ public class EvaluationTool extends JFrame {
 
 	private void source_code_url_labelMouseMouseClicked(MouseEvent event) {
 		try {
-			if(source_code_url != null) {
-				Runtime.getRuntime().exec("cmd.exe /c start " + source_code_url);
+			if (source_code_url != null) {
+				Runtime.getRuntime()
+						.exec("cmd.exe /c start " + source_code_url);
 			}
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
 	}
-	
+
 	private void textFieldGotFocus(FocusEvent e) {
-		JTextField field = (JTextField)e.getSource();
+		JTextField field = (JTextField) e.getSource();
 		field.selectAll();
 	}
 
 	private void view_path_text_fieldMouseMouseClicked(MouseEvent event) {
 		String selected_path = comment_path_list.getSelectedValue();
-		if(selected_path != null) {
-			if(comment_types == null) {
+		if (selected_path != null) {
+			if (comment_types == null) {
 				loadCommentsTypes();
 			}
-			if(comment_types.get(selected_path).equals("file")) {
+
+			if (comment_types.get(selected_path).equals("file")) {
 				view_path_text_field.setText(selected_path);
 			} else {
-				view_path_text_field.setText(selected_path.substring(0,selected_path.lastIndexOf("/")));
+				view_path_text_field.setText(selected_path.substring(0,
+						selected_path.lastIndexOf("/")));
 			}
+
 			view_path_text_field.selectAll();
 		}
 	}
-	
+
 	public String getColoredInfo(String path) {
 		return ca.getColoredInfo(path);
+	}
+
+	private void buildPathTree() {
+		allComments = ca.getAllComments();
+		for (String path : allComments.keySet()) {
+			addNodeToPathTree(path);
+		}
+	}
+
+	private DefaultMutableTreeNode addNodeToPathTree(String path) {
+		if (pathTree == null) {
+			pathTree = new TreeMap<String, DefaultMutableTreeNode>();
+			DefaultMutableTreeNode root = new DefaultMutableTreeNode("/");
+			pathTree.put("/", root);
+		}
+
+		if (path == null || path.equals("")) {
+			return pathTree.get("/");
+		}
+
+		if (!pathTree.containsKey(path)) {
+			DefaultMutableTreeNode parent = addNodeToPathTree(path.substring(0,
+					path.lastIndexOf("/")));
+			String name = path.substring(path.lastIndexOf("/") + 1);
+			DefaultMutableTreeNode node = new DefaultMutableTreeNode(name);
+			pathTree.put(path, node);
+			parent.add(node);
+		}
+
+		return pathTree.get(path);
+
+	}
+
+	private void jTreeValueChanged(TreeSelectionEvent e) {
+		DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode) jTree0
+				.getLastSelectedPathComponent();
+		if (selectedNode != null) {
+			StringBuilder sb = new StringBuilder();
+			TreeNode[] tn = selectedNode.getPath();
+			for (int i = 1; i < tn.length; ++i) {
+				sb.append("/" + tn[i].toString());
+			}
+			String selectedPath = sb.toString();
+			updateReportInfo(selectedPath);
+		}
+	}
+
+	private void updateReportInfo(String selectedPath) {
+		StringBuilder info = new StringBuilder();
+		StringBuilder comments = new StringBuilder();
+		
+		Map<String, Integer> typeCounter = new HashMap<String, Integer>();
+		for(Map.Entry<String, String> entry: allComments.entrySet()) {
+			String path = entry.getKey();
+			if(path.startsWith(selectedPath)) {
+				String type = comment_types.get(path);
+				if(typeCounter.containsKey(type)){
+					typeCounter.put(type, typeCounter.get(type) + 1);
+				} else {
+					typeCounter.put(type, 1);
+				}
+				
+				comments.append("<b>" + path + "</b><br/>");
+				comments.append(getColoredInfo(path));
+				comments.append("<br/><br/>");
+				
+			}
+		}
+		
+		for(Map.Entry<String, Integer> entry: typeCounter.entrySet()) {
+			info.append(entry.getKey() + ":" + entry.getValue() + "\r\n");
+		}
+		
+		stat_info_jTextArea.setText(info.toString());
+		comments_info_jEditorPane.setText(comments.toString());
 	}
 
 }
