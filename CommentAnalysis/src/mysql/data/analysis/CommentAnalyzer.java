@@ -37,15 +37,17 @@ import mysql.data.filter.CategoryTagFilter;
 import mysql.data.filter.DoNothingFilter;
 import mysql.data.filter.FilterBase;
 import mysql.data.filter.HtmlFilter;
+import mysql.data.filter.IscasLinkFilter;
 import mysql.data.filter.PunctuationFilter;
+import mysql.data.filter.SourceCodeLineByLineCommentFilter;
 import mysql.data.filter.TemplateCandidateFilter;
 import mysql.data.util.PropertiesUtil;
 
 public class CommentAnalyzer {
 	private static Logger logger = Logger.getLogger(CommentAnalyzer.class);
 	public static boolean LOADDATATODB = false;
-	private FilterBase seg_filter = new CategoryTagFilter(new HtmlFilter(new PunctuationFilter(new DoNothingFilter())));
-	private FilterBase seg_filter_withPunc = new CategoryTagFilter(new HtmlFilter(new DoNothingFilter()));
+	private FilterBase seg_filter = new CategoryTagFilter(new HtmlFilter(new IscasLinkFilter(new PunctuationFilter(new SourceCodeLineByLineCommentFilter(new  DoNothingFilter())))));
+	private FilterBase seg_filter_withPunc = new CategoryTagFilter(new IscasLinkFilter(new HtmlFilter(new SourceCodeLineByLineCommentFilter(new DoNothingFilter()))));
 	private Properties props;
 	private Connection source_conn;
 	private Connection storage_conn;
@@ -55,6 +57,7 @@ public class CommentAnalyzer {
 	private boolean loadFromFile;
 
 	public CommentAnalyzer(boolean loadFromFile) {
+		logger.setLevel(Level.WARN);
 		this.loadFromFile = loadFromFile;
 		props = PropertiesUtil.getProperties();
 		StringBuilder sourceurl = new StringBuilder();
@@ -160,7 +163,6 @@ public class CommentAnalyzer {
 		logger.info("extractNewTemplate");
 		try {
 			WordSeg word_seg = new WordSeg();
-//			FilterBase seg_filter = new CategoryTagFilter(new HtmlFilter(new PunctuationFilter(new EnglishFilter(new DoNothingFilter()))));
 			AlgorithmsUtil algo = new AlgorithmsUtil();
 			
 			PrintWriter writer = new PrintWriter(new File(props.getProperty("mysql.data.DataSource.rootPath") + "/" + props.getProperty("mysql.data.analysis.CommentAnalyzer.newTemplateFile")));
@@ -508,9 +510,9 @@ public class CommentAnalyzer {
 
 	public String filterComment(String content) {
 		// 将原注释中的html标签， 以及 [[Category:]] [[File:]]这样的东西处理掉
-		FilterBase filter = new CategoryTagFilter(new HtmlFilter(
-				new DoNothingFilter()));
-		return filterComment(filter, content);
+//		FilterBase filter = new CategoryTagFilter(new HtmlFilter(
+//				new DoNothingFilter()));
+		return filterComment(seg_filter, content);
 	}
 
 	public String filterComment(FilterBase filter, String content) {

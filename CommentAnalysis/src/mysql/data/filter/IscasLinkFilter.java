@@ -1,6 +1,9 @@
 package mysql.data.filter;
 
+import java.util.Map;
 import java.util.regex.Pattern;
+
+import mysql.data.analysis.CommentAnalyzer;
 
 public class IscasLinkFilter implements FilterBase {
 	private FilterBase filter;
@@ -27,6 +30,20 @@ public class IscasLinkFilter implements FilterBase {
 		inprocess = Pattern.compile(regex).matcher(inprocess).replaceAll("");
 		
 		return filter.getText(inprocess.trim());
+	}
+	
+	public static void main(String[] args) {
+		CommentAnalyzer ca = new CommentAnalyzer(true);
+		Map<String, String> allComments = ca.getAllComments();
+		String path = "/mm/page_alloc.c/get_page_from_freelist(1783)(linux-3.5.4)";
+		FilterBase filter = new CategoryTagFilter(new HtmlFilter(new IscasLinkFilter(new DoNothingFilter())));
+//		System.out.println(filter.getText(allComments.get(path)));
+		
+		IscasChineseCommentExtractor cf = new IscasChineseCommentExtractor();
+		for(String s: cf.getText(filter.getText(allComments.get(path)))){
+			System.out.println(s);
+		}
+		
 	}
 
 }

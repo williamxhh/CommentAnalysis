@@ -24,7 +24,7 @@ public class WordSeg {
 		return null;
 	}
 	
-	public WordSeg() throws Exception {
+	static {
 		logger.setLevel(Level.WARN);
 		int charset_type = 1;
 		int init_flag = CLibrary.Instance.NLPIR_Init("", charset_type, "0");
@@ -32,12 +32,12 @@ public class WordSeg {
 
 		if (0 == init_flag) {
 			nativeBytes = CLibrary.Instance.NLPIR_GetLastErrorMsg();
-			throw new Exception("初始化失败！fail reason is "+nativeBytes);
+			logger.error("初始化失败！fail reason is "+nativeBytes);
 		}
 		addUserDictWords();
 	}
 	
-	private void addUserDictWords() {
+	private static void addUserDictWords() {
 		String user_dict = SystemParas.user_dict;
 		for(String word: user_dict.split(" ")){
 			CLibrary.Instance.NLPIR_AddUserWord(word + " n");
@@ -86,7 +86,7 @@ public class WordSeg {
 	}
 	
 	public void exit() {
-		CLibrary.Instance.NLPIR_Exit();
+//		CLibrary.Instance.NLPIR_Exit();
 	}
 	
 }

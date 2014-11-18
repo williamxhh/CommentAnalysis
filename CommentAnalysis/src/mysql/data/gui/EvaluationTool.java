@@ -13,6 +13,7 @@ import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.net.URL;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -39,6 +40,8 @@ import javax.swing.JTree;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.event.HyperlinkEvent;
+import javax.swing.event.HyperlinkListener;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 import javax.swing.event.TreeSelectionEvent;
@@ -53,6 +56,8 @@ import mysql.data.filter.CategoryTagFilter;
 import mysql.data.filter.DoNothingFilter;
 import mysql.data.filter.FilterBase;
 import mysql.data.filter.HtmlFilter;
+import mysql.data.filter.IscasLinkFilter;
+import mysql.data.filter.SourceCodeLineByLineCommentFilter;
 import mysql.data.util.PropertiesUtil;
 
 import org.dyno.visual.swing.layouts.Bilateral;
@@ -72,9 +77,11 @@ public class EvaluationTool extends JFrame {
 	Map<String, DefaultMutableTreeNode> pathTree = null;
 	String source_code_url = null;
 	FilterBase filter = null;
-	FilterBase noHtmlFilter = null;
 	EvaluationPreparation ep = null;
 	CommentAnalyzer ca = null;
+	
+	private Thread backTask = null;
+	private int update_counter = 0;
 
 	private boolean judgePanelInitialized = false;
 
@@ -187,8 +194,7 @@ public class EvaluationTool extends JFrame {
 			}
 			filteredComments = new HashMap<String, String>();
 			filter = new CategoryTagFilter(
-					new HtmlFilter(new DoNothingFilter()));
-			noHtmlFilter = new CategoryTagFilter(new DoNothingFilter());
+					new HtmlFilter(new IscasLinkFilter(new SourceCodeLineByLineCommentFilter(new DoNothingFilter()))));
 			if (comment_types == null) {
 				loadCommentsTypes();
 			}
@@ -241,6 +247,21 @@ public class EvaluationTool extends JFrame {
 		if (comments_info_jEditorPane == null) {
 			comments_info_jEditorPane = new JEditorPane();
 			comments_info_jEditorPane.setContentType("text/html");
+			comments_info_jEditorPane.setEditable(false);
+			comments_info_jEditorPane.addHyperlinkListener(new HyperlinkListener() {
+				
+				@Override
+				public void hyperlinkUpdate(HyperlinkEvent e) {
+					if(e.getEventType() == HyperlinkEvent.EventType.ACTIVATED){
+						URL url = e.getURL();
+						try {
+							Runtime.getRuntime().exec("cmd.exe /c start " + url.toString());
+						} catch (IOException e1) {
+							e1.printStackTrace();
+						}
+					}
+				}
+			});
 		}
 		return comments_info_jEditorPane;
 	}
@@ -294,7 +315,9 @@ public class EvaluationTool extends JFrame {
 		if (source_code_url_label == null) {
 			source_code_url_label = new JLabel();
 			source_code_url_label
-					.setText("<html><a href = ''>http://124.16.141.157/lxr-0101/source/?v=linux-3.5.4</a></html>");
+					.setText("<html><a href = ''>" +PropertiesUtil.getProperties().getProperty(
+							"mysql.data.gui.EvaluationTool.sourcecode_url_prefix") + PropertiesUtil.getProperties().getProperty(
+									"mysql.data.gui.EvaluationTool.sourcecode_url_version")+"</a></html>");
 			source_code_url_label.addMouseListener(new MouseAdapter() {
 
 				public void mouseClicked(MouseEvent event) {
@@ -1302,7 +1325,10 @@ public class EvaluationTool extends JFrame {
 	}
 
 	private String getLineNo(String path) {
-		return path.substring(path.indexOf("(") + 1, path.indexOf(")"));
+		if(path.indexOf("(") != -1 && path.indexOf(")") != -1)
+			return path.substring(path.indexOf("(") + 1, path.indexOf(")"));
+		
+		return "";
 	}
 
 	private void comment_path_listListSelectionValueChanged(
@@ -1316,8 +1342,6 @@ public class EvaluationTool extends JFrame {
 			}
 			// 更新注释框所显示的注释内容
 			if (selected_path != null) {
-				// selected_comment_jeditor_pane.setText(noHtmlFilter.getText(allComments.get(selected_path)).replaceAll("\n",
-				// "<br/>"));
 				selected_comment_jeditor_pane
 						.setText(getColoredInfo(selected_path));
 			}
@@ -1461,47 +1485,77 @@ public class EvaluationTool extends JFrame {
 	}
 
 	private void jTreeValueChanged(TreeSelectionEvent e) {
-		DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode) jTree0
-				.getLastSelectedPathComponent();
-		if (selectedNode != null) {
-			StringBuilder sb = new StringBuilder();
-			TreeNode[] tn = selectedNode.getPath();
-			for (int i = 1; i < tn.length; ++i) {
-				sb.append("/" + tn[i].toString());
-			}
-			String selectedPath = sb.toString();
-			updateReportInfo(selectedPath);
-		}
+		stat_info_jTextArea.setText("处理中");
+		comments_info_jEditorPane.setText("处理中");
+				
+		backTask = new Thread(new BackgroundUpdateTask());
+		backTask.start();
 	}
 
-	private void updateReportInfo(String selectedPath) {
-		StringBuilder info = new StringBuilder();
-		StringBuilder comments = new StringBuilder();
-		
-		Map<String, Integer> typeCounter = new HashMap<String, Integer>();
-		for(Map.Entry<String, String> entry: allComments.entrySet()) {
-			String path = entry.getKey();
-			if(path.startsWith(selectedPath)) {
-				String type = comment_types.get(path);
-				if(typeCounter.containsKey(type)){
-					typeCounter.put(type, typeCounter.get(type) + 1);
-				} else {
-					typeCounter.put(type, 1);
+	class BackgroundUpdateTask implements Runnable {
+
+		@Override
+		public void run() {
+			int mycouter = ++update_counter;
+			DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode) jTree0
+					.getLastSelectedPathComponent();
+			if (selectedNode != null) {
+				StringBuilder sb = new StringBuilder();
+				TreeNode[] tn = selectedNode.getPath();
+				for (int i = 1; i < tn.length; ++i) {
+					sb.append("/" + tn[i].toString());
+				}
+				String selectedPath = sb.toString();
+				
+				StringBuilder info = new StringBuilder();
+				StringBuilder comments = new StringBuilder();
+				Map<String, Integer> typeCounter = new HashMap<String, Integer>();
+				for(Map.Entry<String, String> entry: allComments.entrySet()) {
+					String path = entry.getKey();
+					if(path.startsWith(selectedPath)) {
+						String type = comment_types.get(path);
+						if(typeCounter.containsKey(type)){
+							typeCounter.put(type, typeCounter.get(type) + 1);
+						} else {
+							typeCounter.put(type, 1);
+						}
+						
+						String filename = "";
+						if(!type.equals("file")) {
+							filename = path.substring(0,path.lastIndexOf("/"));
+						} else {
+							filename = path;
+						}
+						StringBuilder url = new StringBuilder();
+						url.append(PropertiesUtil.getProperties().getProperty(
+								"mysql.data.gui.EvaluationTool.sourcecode_url_prefix"));
+						url.append(filename);
+						url.append(PropertiesUtil.getProperties().getProperty(
+								"mysql.data.gui.EvaluationTool.sourcecode_url_version"));
+						
+						if(!type.equals("file")){
+							url.append("#" + getLineNo(path));
+						}
+						
+						comments.append("<a href = '" + url.toString() + "'>" + path + "</a><br/>");
+						comments.append(getColoredInfo(path));
+						comments.append("<br/><br/>");
+						
+					}
 				}
 				
-				comments.append("<b>" + path + "</b><br/>");
-				comments.append(getColoredInfo(path));
-				comments.append("<br/><br/>");
+				for(Map.Entry<String, Integer> entry: typeCounter.entrySet()) {
+					info.append(entry.getKey() + ":" + entry.getValue() + "\r\n");
+				}
 				
+				if(mycouter == update_counter){
+					stat_info_jTextArea.setText(info.toString());
+					comments_info_jEditorPane.setText(comments.toString());
+				} else {
+					System.out.println("cancle " + selectedPath);
+				}
 			}
 		}
 		
-		for(Map.Entry<String, Integer> entry: typeCounter.entrySet()) {
-			info.append(entry.getKey() + ":" + entry.getValue() + "\r\n");
-		}
-		
-		stat_info_jTextArea.setText(info.toString());
-		comments_info_jEditorPane.setText(comments.toString());
 	}
-
 }
