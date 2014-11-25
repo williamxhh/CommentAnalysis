@@ -1,5 +1,9 @@
 package mysql.data.gui;
 
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.GridLayout;
 import java.awt.HeadlessException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -33,6 +37,7 @@ import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
@@ -60,11 +65,6 @@ import mysql.data.filter.IscasLinkFilter;
 import mysql.data.filter.SourceCodeLineByLineCommentFilter;
 import mysql.data.util.PropertiesUtil;
 
-import org.dyno.visual.swing.layouts.Bilateral;
-import org.dyno.visual.swing.layouts.Constraints;
-import org.dyno.visual.swing.layouts.GroupLayout;
-import org.dyno.visual.swing.layouts.Leading;
-
 //VS4E -- DO NOT REMOVE THIS LINE!
 public class EvaluationTool extends JFrame {
 
@@ -75,10 +75,14 @@ public class EvaluationTool extends JFrame {
 	Map<String, String> comment_types = null;
 	Map<String, JudgeTableInfo> judgeList = null;
 	Map<String, DefaultMutableTreeNode> pathTree = null;
+	Map<String, String> tree_comment_info = null;
 	String source_code_url = null;
 	FilterBase filter = null;
 	EvaluationPreparation ep = null;
 	CommentAnalyzer ca = null;
+	
+	//记录report面板中上面的统计信息
+	private String stat_info;
 	
 	private Thread backTask = null;
 	private int update_counter = 0;
@@ -180,6 +184,8 @@ public class EvaluationTool extends JFrame {
 
 	private JScrollPane jScrollPane4;
 
+	private JComboBox<String> jTree_comment_type_comboBox;
+
 	public EvaluationTool() {
 		loadComments();
 		initComponents();
@@ -228,22 +234,36 @@ public class EvaluationTool extends JFrame {
 
 	private void initComponents() {
 		setTitle("源代码阅读注释分析工具");
-		setLayout(new GroupLayout());
-		add(getJTabbedPane0(), new Constraints(new Bilateral(0, 0, 5),
-				new Leading(0, 738, 12, 12)));
+		setLayout(new BorderLayout());
+		add(getJTabbedPane0());
 		setSize(714, 738);
 		setLocation(400, 200);
 	}
 
-	private JScrollPane getJScrollPane4() {
+	private JComboBox<String> getJTreeCommentTypeComboBox() {
+		if (jTree_comment_type_comboBox == null) {
+			jTree_comment_type_comboBox = new JComboBox<String>();
+			jTree_comment_type_comboBox.setDoubleBuffered(false);
+			jTree_comment_type_comboBox.setBorder(null);
+			jTree_comment_type_comboBox.addItemListener(new ItemListener() {
+
+				public void itemStateChanged(ItemEvent event) {
+					jTree_comment_type_comboBox_ItemStateChanged(event);
+				}
+			});
+		}
+		return jTree_comment_type_comboBox;
+	}
+
+	private JScrollPane getJTreeCommentInfoScrollPane() {
 		if (jScrollPane4 == null) {
 			jScrollPane4 = new JScrollPane();
-			jScrollPane4.setViewportView(getJEditorPane0());
+			jScrollPane4.setViewportView(getCommentInfoEditorPane());
 		}
 		return jScrollPane4;
 	}
 
-	private JEditorPane getJEditorPane0() {
+	private JEditorPane getCommentInfoEditorPane() {
 		if (comments_info_jEditorPane == null) {
 			comments_info_jEditorPane = new JEditorPane();
 			comments_info_jEditorPane.setContentType("text/html");
@@ -266,22 +286,22 @@ public class EvaluationTool extends JFrame {
 		return comments_info_jEditorPane;
 	}
 
-	private JScrollPane getJScrollPane5() {
+	private JScrollPane getJTreeStatInfoScrollPane() {
 		if (jScrollPane5 == null) {
 			jScrollPane5 = new JScrollPane();
-			jScrollPane5.setViewportView(getJTextArea0());
+			jScrollPane5.setViewportView(getStatInfoTextArea());
 		}
 		return jScrollPane5;
 	}
 
-	private JTextArea getJTextArea0() {
+	private JTextArea getStatInfoTextArea() {
 		if (stat_info_jTextArea == null) {
 			stat_info_jTextArea = new JTextArea();
 		}
 		return stat_info_jTextArea;
 	}
 
-	private JScrollPane getJScrollPane3() {
+	private JScrollPane getJTreeScrollPane() {
 		if (jScrollPane3 == null) {
 			jScrollPane3 = new JScrollPane();
 			jScrollPane3.setViewportView(getJTree0());
@@ -311,7 +331,7 @@ public class EvaluationTool extends JFrame {
 		return jTree0;
 	}
 
-	private JLabel getSource_code_url_label() {
+	private JLabel getSourceCodeUrlLabel() {
 		if (source_code_url_label == null) {
 			source_code_url_label = new JLabel();
 			source_code_url_label
@@ -328,7 +348,7 @@ public class EvaluationTool extends JFrame {
 		return source_code_url_label;
 	}
 
-	private JButton getScore_btn() {
+	private JButton getScoreBtn() {
 		if (score_btn == null) {
 			score_btn = new JButton();
 			score_btn.setText("打  分");
@@ -342,7 +362,7 @@ public class EvaluationTool extends JFrame {
 		return score_btn;
 	}
 
-	private JList<String> getJList0() {
+	private JList<String> getCommentPathJList() {
 		if (comment_path_list == null) {
 			comment_path_list = new JList<String>();
 			comment_path_list
@@ -371,159 +391,7 @@ public class EvaluationTool extends JFrame {
 		}
 		return jLabel15;
 	}
-
-	private JTextField getJTextField2() {
-		if (consistency_score_text_field == null) {
-			consistency_score_text_field = new JTextField();
-			consistency_score_text_field.setText("0");
-			consistency_score_text_field.addFocusListener(new FocusListener() {
-
-				@Override
-				public void focusLost(FocusEvent e) {
-				}
-
-				@Override
-				public void focusGained(FocusEvent e) {
-					textFieldGotFocus(e);
-				}
-			});
-		}
-		return consistency_score_text_field;
-	}
-
-	private JLabel getJLabel16() {
-		if (jLabel16 == null) {
-			jLabel16 = new JLabel();
-			jLabel16.setText("一致性：");
-		}
-		return jLabel16;
-	}
-
-	private JTextField getJTextField1() {
-		if (completeness_score_text_field == null) {
-			completeness_score_text_field = new JTextField();
-			completeness_score_text_field.setText("0");
-			completeness_score_text_field.addFocusListener(new FocusListener() {
-
-				@Override
-				public void focusLost(FocusEvent e) {
-				}
-
-				@Override
-				public void focusGained(FocusEvent e) {
-					textFieldGotFocus(e);
-				}
-			});
-		}
-		return completeness_score_text_field;
-	}
-
-	private JLabel getJLabel14() {
-		if (jLabel14 == null) {
-			jLabel14 = new JLabel();
-			jLabel14.setText("完整性：");
-		}
-		return jLabel14;
-	}
-
-	private JTextField getJTextField7() {
-		if (relativity_score_text_field == null) {
-			relativity_score_text_field = new JTextField();
-			relativity_score_text_field.setText("0");
-			relativity_score_text_field.addFocusListener(new FocusListener() {
-
-				@Override
-				public void focusLost(FocusEvent e) {
-				}
-
-				@Override
-				public void focusGained(FocusEvent e) {
-					textFieldGotFocus(e);
-				}
-			});
-		}
-		return relativity_score_text_field;
-	}
-
-	private JTextField getJTextField6() {
-		if (verifiability_score_text_field == null) {
-			verifiability_score_text_field = new JTextField();
-			verifiability_score_text_field.setText("0");
-			verifiability_score_text_field
-					.addFocusListener(new FocusListener() {
-
-						@Override
-						public void focusLost(FocusEvent e) {
-						}
-
-						@Override
-						public void focusGained(FocusEvent e) {
-							textFieldGotFocus(e);
-						}
-					});
-
-		}
-		return verifiability_score_text_field;
-	}
-
-	private JTextField getJTextField5() {
-		if (objectivity_score_text_field == null) {
-			objectivity_score_text_field = new JTextField();
-			objectivity_score_text_field.setText("0");
-			objectivity_score_text_field.addFocusListener(new FocusListener() {
-
-				@Override
-				public void focusLost(FocusEvent e) {
-				}
-
-				@Override
-				public void focusGained(FocusEvent e) {
-					textFieldGotFocus(e);
-				}
-			});
-		}
-		return objectivity_score_text_field;
-	}
-
-	private JTextField getJTextField4() {
-		if (readability_score_text_field == null) {
-			readability_score_text_field = new JTextField();
-			readability_score_text_field.setText("0");
-			readability_score_text_field.addFocusListener(new FocusListener() {
-
-				@Override
-				public void focusLost(FocusEvent e) {
-				}
-
-				@Override
-				public void focusGained(FocusEvent e) {
-					textFieldGotFocus(e);
-				}
-			});
-
-		}
-		return readability_score_text_field;
-	}
-
-	private JTextField getJTextField3() {
-		if (infomation_score_text_field == null) {
-			infomation_score_text_field = new JTextField();
-			infomation_score_text_field.setText("0");
-			infomation_score_text_field.addFocusListener(new FocusListener() {
-
-				@Override
-				public void focusLost(FocusEvent e) {
-				}
-
-				@Override
-				public void focusGained(FocusEvent e) {
-					textFieldGotFocus(e);
-				}
-			});
-		}
-		return infomation_score_text_field;
-	}
-
+	
 	private JLabel getJLabel27() {
 		if (jLabel27 == null) {
 			jLabel27 = new JLabel();
@@ -564,6 +432,25 @@ public class EvaluationTool extends JFrame {
 		return jLabel23;
 	}
 
+	
+	private JLabel getJLabel16() {
+		if (jLabel16 == null) {
+			jLabel16 = new JLabel();
+			jLabel16.setText("一致性：");
+		}
+		return jLabel16;
+	}
+	
+	private JLabel getJLabel14() {
+		if (jLabel14 == null) {
+			jLabel14 = new JLabel();
+			jLabel14.setText("完整性：");
+		}
+		return jLabel14;
+	}
+	
+
+
 	private JLabel getJLabel22() {
 		if (jLabel22 == null) {
 			jLabel22 = new JLabel();
@@ -603,6 +490,153 @@ public class EvaluationTool extends JFrame {
 		}
 		return jLabel18;
 	}
+	
+	private JTextField getJTextField2() {
+		if (consistency_score_text_field == null) {
+			consistency_score_text_field = new JTextField();
+			consistency_score_text_field.setColumns(5);
+			consistency_score_text_field.setText("0");
+			consistency_score_text_field.addFocusListener(new FocusListener() {
+
+				@Override
+				public void focusLost(FocusEvent e) {
+				}
+
+				@Override
+				public void focusGained(FocusEvent e) {
+					textFieldGotFocus(e);
+				}
+			});
+		}
+		return consistency_score_text_field;
+	}
+
+	private JTextField getJTextField1() {
+		if (completeness_score_text_field == null) {
+			completeness_score_text_field = new JTextField();
+			completeness_score_text_field.setColumns(5);
+			completeness_score_text_field.setText("0");
+			completeness_score_text_field.addFocusListener(new FocusListener() {
+
+				@Override
+				public void focusLost(FocusEvent e) {
+				}
+
+				@Override
+				public void focusGained(FocusEvent e) {
+					textFieldGotFocus(e);
+				}
+			});
+		}
+		return completeness_score_text_field;
+	}
+
+
+
+	private JTextField getJTextField7() {
+		if (relativity_score_text_field == null) {
+			relativity_score_text_field = new JTextField();
+			relativity_score_text_field.setColumns(5);
+			relativity_score_text_field.setText("0");
+			relativity_score_text_field.addFocusListener(new FocusListener() {
+
+				@Override
+				public void focusLost(FocusEvent e) {
+				}
+
+				@Override
+				public void focusGained(FocusEvent e) {
+					textFieldGotFocus(e);
+				}
+			});
+		}
+		return relativity_score_text_field;
+	}
+
+	private JTextField getJTextField6() {
+		if (verifiability_score_text_field == null) {
+			verifiability_score_text_field = new JTextField();
+			verifiability_score_text_field.setColumns(5);
+			verifiability_score_text_field.setText("0");
+			verifiability_score_text_field
+					.addFocusListener(new FocusListener() {
+
+						@Override
+						public void focusLost(FocusEvent e) {
+						}
+
+						@Override
+						public void focusGained(FocusEvent e) {
+							textFieldGotFocus(e);
+						}
+					});
+
+		}
+		return verifiability_score_text_field;
+	}
+
+	private JTextField getJTextField5() {
+		if (objectivity_score_text_field == null) {
+			objectivity_score_text_field = new JTextField();
+			objectivity_score_text_field.setColumns(5);
+			objectivity_score_text_field.setText("0");
+			objectivity_score_text_field.addFocusListener(new FocusListener() {
+
+				@Override
+				public void focusLost(FocusEvent e) {
+				}
+
+				@Override
+				public void focusGained(FocusEvent e) {
+					textFieldGotFocus(e);
+				}
+			});
+		}
+		return objectivity_score_text_field;
+	}
+
+	private JTextField getJTextField4() {
+		if (readability_score_text_field == null) {
+			readability_score_text_field = new JTextField();
+			readability_score_text_field.setColumns(5);
+			readability_score_text_field.setText("0");
+			readability_score_text_field.addFocusListener(new FocusListener() {
+
+				@Override
+				public void focusLost(FocusEvent e) {
+				}
+
+				@Override
+				public void focusGained(FocusEvent e) {
+					textFieldGotFocus(e);
+				}
+			});
+
+		}
+		return readability_score_text_field;
+	}
+
+	private JTextField getJTextField3() {
+		if (infomation_score_text_field == null) {
+			infomation_score_text_field = new JTextField();
+			infomation_score_text_field.setColumns(5);
+			infomation_score_text_field.setText("0");
+			infomation_score_text_field.addFocusListener(new FocusListener() {
+
+				@Override
+				public void focusLost(FocusEvent e) {
+				}
+
+				@Override
+				public void focusGained(FocusEvent e) {
+					textFieldGotFocus(e);
+				}
+			});
+		}
+		return infomation_score_text_field;
+	}
+
+
 
 	private JComboBox<String> getJudgeCommentTypeComboBox() {
 		if (judge_comment_type_combo_box == null) {
@@ -638,7 +672,7 @@ public class EvaluationTool extends JFrame {
 		return comment_content_text_area;
 	}
 
-	private JButton getJButton2() {
+	private JButton getCommentSearchBtn() {
 		if (comment_search_btn == null) {
 			comment_search_btn = new JButton();
 			comment_search_btn.setText("查  询");
@@ -652,204 +686,6 @@ public class EvaluationTool extends JFrame {
 		return comment_search_btn;
 	}
 
-	// private JPanel getJudgePanel() {
-	// if (judgePanel == null) {
-	// judgePanel = new JPanel();
-	// judgePanel.setLayout(new GroupLayout());
-	// judgePanel.add(getJScrollPane1(), new Constraints(new Leading(5, 229, 10,
-	// 10), new Leading(137, 528, 10, 10)));
-	// judgePanel.add(getJLabel9(), new Constraints(new Leading(246, 12, 12),
-	// new Leading(140, 12, 12)));
-	// judgePanel.add(getJLabel11(), new Constraints(new Leading(246, 12, 12),
-	// new Leading(166, 10, 10)));
-	// judgePanel.add(getJLabel3(), new Constraints(new Leading(15, 12, 12), new
-	// Leading(22, 12, 12)));
-	// judgePanel.add(getJudge_type_filter_btn(), new Constraints(new
-	// Leading(471, 12, 12), new Leading(17, 12, 12)));
-	// judgePanel.add(getJLabel4(), new Constraints(new Leading(19, 10, 10), new
-	// Leading(64, 12, 12)));
-	// judgePanel.add(getTotal_comment_label(), new Constraints(new Leading(39,
-	// 12, 12), new Leading(64, 12, 12)));
-	// judgePanel.add(getJLabel6(), new Constraints(new Leading(86, 12, 12), new
-	// Leading(64, 12, 12)));
-	// judgePanel.add(getJudged_comment_label(), new Constraints(new
-	// Leading(170, 12, 12), new Leading(64, 12, 12)));
-	// judgePanel.add(getJLabel8(), new Constraints(new Leading(214, 10, 10),
-	// new Leading(64, 12, 12)));
-	// judgePanel.add(getUnjudgeRadioButton(), new Constraints(new Leading(39,
-	// 12, 12), new Leading(94, 12, 12)));
-	// judgePanel.add(getJudgedRadioButton(), new Constraints(new Leading(121,
-	// 12, 12), new Leading(94, 12, 12)));
-	// judge_type_bg.add(getUnjudgeRadioButton());
-	// judge_type_bg.add(getJudgedRadioButton());
-	// judgePanel.add(getSource_code_url_label(), new Constraints(new
-	// Leading(317, 12, 12), new Leading(140, 12, 12)));
-	// judgePanel.add(getJLabel12(), new Constraints(new Leading(246, 12, 12),
-	// new Leading(526, 12, 12)));
-	// judgePanel.add(getValidRadioButton(), new Constraints(new Leading(300,
-	// 10, 10), new Leading(524, 10, 10)));
-	// judgePanel.add(getInvalidRadioButton(), new Constraints(new Leading(357,
-	// 10, 10), new Leading(524, 10, 10)));
-	// judgePanel.add(getValidationEmptyRadioButton(), new Constraints(new
-	// Leading(412, 10, 10), new Leading(524, 10, 10)));
-	// validation_bg.add(getValidRadioButton());
-	// validation_bg.add(getValidationEmptyRadioButton());
-	// validation_bg.add(getInvalidRadioButton());
-	// judgePanel.add(getJScrollPane2(), new Constraints(new Leading(246, 444,
-	// 10, 10), new Leading(192, 322, 10, 10)));
-	// judgePanel.add(getJudgeCommentTypeComboBox(), new Constraints(new
-	// Leading(82, 371, 12, 12), new Leading(18, 12, 12)));
-	// judgePanel.add(getJLabel18(), new Constraints(new Leading(246, 10, 411),
-	// new Leading(580, 12, 12)));
-	// judgePanel.add(getJLabel19(), new Constraints(new Leading(413, 10, 244),
-	// new Leading(580, 10, 110)));
-	// judgePanel.add(getJLabel20(), new Constraints(new Leading(246, 10, 411),
-	// new Leading(610, 12, 12)));
-	// judgePanel.add(getJLabel21(), new Constraints(new Leading(413, 10, 244),
-	// new Leading(610, 10, 80)));
-	// judgePanel.add(getJLabel22(), new Constraints(new Leading(246, 10, 411),
-	// new Leading(640, 12, 12)));
-	// judgePanel.add(getJLabel23(), new Constraints(new Leading(334, 10, 363),
-	// new Leading(580, 10, 110)));
-	// judgePanel.add(getJLabel24(), new Constraints(new Leading(513, 10, 184),
-	// new Leading(580, 10, 110)));
-	// judgePanel.add(getJLabel25(), new Constraints(new Leading(334, 10, 363),
-	// new Leading(610, 10, 80)));
-	// judgePanel.add(getJLabel26(), new Constraints(new Leading(513, 10, 184),
-	// new Leading(610, 10, 80)));
-	// judgePanel.add(getJLabel27(), new Constraints(new Leading(334, 10, 363),
-	// new Leading(640, 10, 50)));
-	// judgePanel.add(getJTextField3(), new Constraints(new Leading(300, 28, 10,
-	// 381), new Leading(580, 18, 10, 110)));
-	// judgePanel.add(getJTextField4(), new Constraints(new Leading(477, 28, 10,
-	// 204), new Leading(580, 18, 10, 110)));
-	// judgePanel.add(getJTextField5(), new Constraints(new Leading(300, 28, 10,
-	// 381), new Leading(610, 18, 10, 80)));
-	// judgePanel.add(getJTextField6(), new Constraints(new Leading(477, 28, 10,
-	// 204), new Leading(610, 18, 10, 80)));
-	// judgePanel.add(getJTextField7(), new Constraints(new Leading(300, 28, 10,
-	// 381), new Leading(640, 18, 10, 50)));
-	// judgePanel.add(getJLabel14(), new Constraints(new Leading(246, 10, 411),
-	// new Leading(552, 10, 10)));
-	// judgePanel.add(getJTextField1(), new Constraints(new Leading(300, 28, 12,
-	// 12), new Leading(552, 18, 10, 138)));
-	// judgePanel.add(getJLabel16(), new Constraints(new Leading(413, 12, 12),
-	// new Leading(552, 10, 138)));
-	// judgePanel.add(getJTextField2(), new Constraints(new Leading(477, 28, 12,
-	// 12), new Leading(552, 18, 10, 138)));
-	// judgePanel.add(getJLabel15(), new Constraints(new Leading(334, 12, 12),
-	// new Leading(552, 10, 138)));
-	// judgePanel.add(getJLabel17(), new Constraints(new Leading(513, 12, 12),
-	// new Leading(552, 10, 138)));
-	// judgePanel.add(getScore_btn(), new Constraints(new Leading(587, 91, 10,
-	// 10), new Leading(637, 12, 12)));
-	// }
-	// return judgePanel;
-	// }
-
-	private JPanel getReportPanel() {
-		if (reportPanel == null) {
-			reportPanel = new JPanel();
-			reportPanel.setLayout(new GroupLayout());
-			reportPanel.add(getJScrollPane3(), new Constraints(new Leading(7, 207, 10, 10), new Leading(50, 600, 10, 10)));
-			reportPanel.add(getJScrollPane5(), new Constraints(new Leading(225, 464, 10, 10), new Leading(50, 125, 10, 10)));
-			reportPanel.add(getJScrollPane4(), new Constraints(new Leading(225, 464, 12, 12), new Leading(180, 470, 12, 12)));
-		}
-		return reportPanel;
-	}
-
-	private JPanel getJudgePanel() {
-		if (judgePanel == null) {
-			judgePanel = new JPanel();
-			judgePanel.setLayout(new GroupLayout());
-			judgePanel.add(getJScrollPane1(), new Constraints(new Leading(5,
-					229, 10, 10), new Leading(137, 528, 10, 10)));
-			judgePanel.add(getJLabel11(), new Constraints(new Leading(246, 12,
-					12), new Leading(166, 10, 10)));
-			judgePanel.add(getJLabel3(), new Constraints(
-					new Leading(15, 12, 12), new Leading(22, 12, 12)));
-			judgePanel.add(getJLabel4(), new Constraints(
-					new Leading(19, 10, 10), new Leading(64, 12, 12)));
-			judgePanel.add(getTotal_comment_label(), new Constraints(
-					new Leading(39, 12, 12), new Leading(64, 12, 12)));
-			judgePanel.add(getJLabel6(), new Constraints(
-					new Leading(86, 12, 12), new Leading(64, 12, 12)));
-			judgePanel.add(getJudged_comment_label(), new Constraints(
-					new Leading(170, 12, 12), new Leading(64, 12, 12)));
-			judgePanel.add(getJLabel8(), new Constraints(new Leading(214, 10,
-					10), new Leading(64, 12, 12)));
-			judgePanel.add(getUnjudgeRadioButton(), new Constraints(
-					new Leading(39, 12, 12), new Leading(94, 12, 12)));
-			judgePanel.add(getJudgedRadioButton(), new Constraints(new Leading(
-					121, 12, 12), new Leading(94, 12, 12)));
-			judge_type_bg.add(getUnjudgeRadioButton());
-			judge_type_bg.add(getJudgedRadioButton());
-			judgePanel.add(getJLabel12(), new Constraints(new Leading(246, 12,
-					12), new Leading(526, 12, 12)));
-			judgePanel.add(getValidRadioButton(), new Constraints(new Leading(
-					300, 10, 10), new Leading(524, 10, 10)));
-			judgePanel.add(getInvalidRadioButton(), new Constraints(
-					new Leading(357, 10, 10), new Leading(524, 10, 10)));
-			judgePanel.add(getValidationEmptyRadioButton(), new Constraints(
-					new Leading(412, 10, 10), new Leading(524, 10, 10)));
-			validation_bg.add(getValidRadioButton());
-			validation_bg.add(getValidationEmptyRadioButton());
-			validation_bg.add(getInvalidRadioButton());
-			judgePanel.add(getJScrollPane2(), new Constraints(new Leading(246,
-					444, 10, 10), new Leading(192, 322, 10, 10)));
-			judgePanel.add(getJLabel18(), new Constraints(new Leading(246, 10,
-					411), new Leading(580, 12, 12)));
-			judgePanel.add(getJLabel19(), new Constraints(new Leading(413, 10,
-					244), new Leading(580, 10, 110)));
-			judgePanel.add(getJLabel20(), new Constraints(new Leading(246, 10,
-					411), new Leading(610, 12, 12)));
-			judgePanel.add(getJLabel21(), new Constraints(new Leading(413, 10,
-					244), new Leading(610, 10, 80)));
-			judgePanel.add(getJLabel22(), new Constraints(new Leading(246, 10,
-					411), new Leading(640, 12, 12)));
-			judgePanel.add(getJLabel23(), new Constraints(new Leading(334, 10,
-					363), new Leading(580, 10, 110)));
-			judgePanel.add(getJLabel24(), new Constraints(new Leading(513, 10,
-					184), new Leading(580, 10, 110)));
-			judgePanel.add(getJLabel25(), new Constraints(new Leading(334, 10,
-					363), new Leading(610, 10, 80)));
-			judgePanel.add(getJLabel26(), new Constraints(new Leading(513, 10,
-					184), new Leading(610, 10, 80)));
-			judgePanel.add(getJLabel27(), new Constraints(new Leading(334, 10,
-					363), new Leading(640, 10, 50)));
-			judgePanel.add(getJTextField3(), new Constraints(new Leading(300,
-					28, 10, 381), new Leading(580, 18, 10, 110)));
-			judgePanel.add(getJTextField4(), new Constraints(new Leading(477,
-					28, 10, 204), new Leading(580, 18, 10, 110)));
-			judgePanel.add(getJTextField5(), new Constraints(new Leading(300,
-					28, 10, 381), new Leading(610, 18, 10, 80)));
-			judgePanel.add(getJTextField6(), new Constraints(new Leading(477,
-					28, 10, 204), new Leading(610, 18, 10, 80)));
-			judgePanel.add(getJTextField7(), new Constraints(new Leading(300,
-					28, 10, 381), new Leading(640, 18, 10, 50)));
-			judgePanel.add(getJLabel14(), new Constraints(new Leading(246, 10,
-					411), new Leading(552, 10, 10)));
-			judgePanel.add(getJTextField1(), new Constraints(new Leading(300,
-					28, 12, 12), new Leading(552, 18, 10, 138)));
-			judgePanel.add(getJLabel16(), new Constraints(new Leading(413, 12,
-					12), new Leading(552, 10, 138)));
-			judgePanel.add(getJTextField2(), new Constraints(new Leading(477,
-					28, 12, 12), new Leading(552, 18, 10, 138)));
-			judgePanel.add(getJLabel15(), new Constraints(new Leading(334, 12,
-					12), new Leading(552, 10, 138)));
-			judgePanel.add(getJLabel17(), new Constraints(new Leading(513, 12,
-					12), new Leading(552, 10, 138)));
-			judgePanel.add(getScore_btn(), new Constraints(new Leading(587, 91,
-					10, 10), new Leading(637, 12, 12)));
-			judgePanel.add(getJudgeCommentTypeComboBox(), new Constraints(
-					new Leading(82, 604, 10, 10), new Leading(18, 12, 12)));
-			judgePanel.add(getJLabel9(), new Constraints(new Leading(246, 12,
-					12), new Leading(126, 12, 12)));
-			judgePanel.add(getSource_code_url_label(), new Constraints(
-					new Leading(246, 12, 12), new Leading(146, 10, 10)));
-		}
-		return judgePanel;
-	}
 
 	private JRadioButton getJudgedRadioButton() {
 		if (judge_type_judged_ratio_btn == null) {
@@ -1008,31 +844,9 @@ public class EvaluationTool extends JFrame {
 	private JScrollPane getJScrollPane1() {
 		if (jScrollPane1 == null) {
 			jScrollPane1 = new JScrollPane();
-			jScrollPane1.setViewportView(getJList0());
+			jScrollPane1.setViewportView(getCommentPathJList());
 		}
 		return jScrollPane1;
-	}
-
-	private JPanel getViewPanel() {
-		if (viewPanel == null) {
-			viewPanel = new JPanel();
-			viewPanel.setLayout(new GroupLayout());
-			viewPanel.add(getJTextField0(), new Constraints(new Leading(118,
-					378, 10, 10), new Leading(25, 12, 12)));
-			viewPanel.add(getJLabel1(), new Constraints(
-					new Leading(39, 12, 12), new Leading(65, 12, 12)));
-			viewPanel.add(getJLabel0(), new Constraints(
-					new Leading(39, 12, 12), new Leading(27, 12, 12)));
-			viewPanel.add(getJButton1(), new Constraints(new Leading(519, 12,
-					12), new Leading(65, 12, 12)));
-			viewPanel.add(getJButton2(), new Constraints(new Leading(519, 12,
-					12), new Leading(22, 12, 12)));
-			viewPanel.add(getCommentTypeComboBox(), new Constraints(
-					new Leading(116, 380, 12, 12), new Leading(62, 12, 12)));
-			viewPanel.add(getJScrollPane0(), new Constraints(new Bilateral(0,
-					0, 22), new Leading(116, 594, 10, 10)));
-		}
-		return viewPanel;
 	}
 
 	private JLabel getJLabel3() {
@@ -1059,7 +873,7 @@ public class EvaluationTool extends JFrame {
 		return jLabel1;
 	}
 
-	private JButton getJButton1() {
+	private JButton getCommentFilterBtn() {
 		if (comment_filter_btn == null) {
 			comment_filter_btn = new JButton();
 			comment_filter_btn.setText("过  滤");
@@ -1076,6 +890,7 @@ public class EvaluationTool extends JFrame {
 	private JTextField getJTextField0() {
 		if (view_path_text_field == null) {
 			view_path_text_field = new JTextField();
+			view_path_text_field.setMinimumSize(new Dimension(40,5));
 			view_path_text_field.addMouseListener(new MouseAdapter() {
 
 				public void mouseClicked(MouseEvent event) {
@@ -1123,6 +938,168 @@ public class EvaluationTool extends JFrame {
 		}
 		return jTabbedPane0;
 	}
+	
+	private JPanel getViewPanel() {
+		if (viewPanel == null) {
+			viewPanel = new JPanel();
+			viewPanel.setLayout(new BorderLayout());
+			
+			JPanel header_panel = new JPanel(new GridLayout(2,1));
+			JPanel comment_path_panel = new JPanel(new BorderLayout());
+			JPanel comment_type_panel = new JPanel(new BorderLayout());
+			
+			comment_path_panel.add(getJLabel0(),BorderLayout.WEST);
+			comment_path_panel.add(getJTextField0(),BorderLayout.CENTER);
+			comment_path_panel.add(getCommentSearchBtn(),BorderLayout.EAST);
+			
+			comment_type_panel.add(getJLabel1(),BorderLayout.WEST);
+			comment_type_panel.add(getCommentTypeComboBox(),BorderLayout.CENTER);
+			comment_type_panel.add(getCommentFilterBtn(),BorderLayout.EAST);
+			
+			header_panel.add(comment_path_panel);
+			header_panel.add(comment_type_panel);
+			
+			viewPanel.add(header_panel, BorderLayout.NORTH);
+			
+			viewPanel.add(getJScrollPane0());
+			
+		}
+		return viewPanel;
+	}
+	
+	private JPanel getJudgePanel() {
+		if (judgePanel == null) {
+			judgePanel = new JPanel();
+			judgePanel.setLayout(new BorderLayout());
+			
+			JPanel comment_type_pane = new JPanel(new FlowLayout());
+			comment_type_pane.add(getJLabel3());
+			comment_type_pane.add(getJudgeCommentTypeComboBox());
+			
+			JPanel comment_count_pane = new JPanel(new FlowLayout());
+			comment_count_pane.add(getJLabel4());
+			comment_count_pane.add(getTotal_comment_label());
+			comment_count_pane.add(getJLabel6());
+			comment_count_pane.add(getJudged_comment_label());
+			comment_count_pane.add(getJLabel8());
+			
+			JPanel comment_judge_state_pane = new JPanel(new FlowLayout());
+			comment_judge_state_pane.add(getUnjudgeRadioButton());
+			comment_judge_state_pane.add(getJudgedRadioButton());
+			judge_type_bg.add(getUnjudgeRadioButton());
+			judge_type_bg.add(getJudgedRadioButton());
+			
+			JPanel header_pane = new JPanel(new GridLayout(3,1));
+			header_pane.add(comment_type_pane);
+			header_pane.add(comment_count_pane);
+			header_pane.add(comment_judge_state_pane);
+			
+			judgePanel.add(header_pane,BorderLayout.NORTH);
+			
+			JPanel comment_info_panel = new JPanel(new BorderLayout());
+			
+			JPanel url_panel = new JPanel(new GridLayout(3,1));
+			url_panel.add(getJLabel9());
+			url_panel.add(getSourceCodeUrlLabel());
+			url_panel.add(getJLabel11());
+			
+			comment_info_panel.add(url_panel,BorderLayout.NORTH);
+			comment_info_panel.add(getJScrollPane2());
+			
+			JPanel score_panel = new JPanel(new BorderLayout());
+			JPanel validation_panel = new JPanel(new FlowLayout());
+			validation_panel.add(getJLabel12());
+			validation_panel.add(getValidRadioButton());
+			validation_panel.add(getInvalidRadioButton());
+			validation_panel.add(getValidationEmptyRadioButton());
+			validation_bg.add(getValidRadioButton());
+			validation_bg.add(getValidationEmptyRadioButton());
+			validation_bg.add(getInvalidRadioButton());
+			score_panel.add(validation_panel, BorderLayout.NORTH);
+			
+			JPanel score_grid_panel = new JPanel(new GridLayout(4,2));
+			JPanel completeness_panel = new JPanel(new FlowLayout());
+			JPanel consistency_panel = new JPanel(new FlowLayout());
+			JPanel information_panel = new JPanel(new FlowLayout());
+			JPanel readability_panel = new JPanel(new FlowLayout());
+			JPanel objectivity_panel = new JPanel(new FlowLayout());
+			JPanel verifiabilit_panel = new JPanel(new FlowLayout());
+			JPanel relativity_panel = new JPanel(new FlowLayout());
+			completeness_panel.add(getJLabel14());
+			completeness_panel.add(getJTextField1());
+			completeness_panel.add(getJLabel15());
+			
+			consistency_panel.add(getJLabel16());
+			consistency_panel.add(getJTextField2());
+			consistency_panel.add(getJLabel17());
+			
+			information_panel.add(getJLabel18());
+			information_panel.add(getJTextField3());
+			information_panel.add(getJLabel23());
+			
+			readability_panel.add(getJLabel19());
+			readability_panel.add(getJTextField4());
+			readability_panel.add(getJLabel24());
+			
+			objectivity_panel.add(getJLabel20());
+			objectivity_panel.add(getJTextField5());
+			objectivity_panel.add(getJLabel25());
+			
+			verifiabilit_panel.add(getJLabel21());
+			verifiabilit_panel.add(getJTextField6());
+			verifiabilit_panel.add(getJLabel26());
+			
+			relativity_panel.add(getJLabel22());
+			relativity_panel.add(getJTextField7());
+			relativity_panel.add(getJLabel27());
+			
+			score_grid_panel.add(completeness_panel);
+			score_grid_panel.add(consistency_panel);
+			score_grid_panel.add(information_panel);
+			score_grid_panel.add(readability_panel);
+			score_grid_panel.add(objectivity_panel);
+			score_grid_panel.add(verifiabilit_panel);
+			score_grid_panel.add(relativity_panel);
+			score_grid_panel.add(getScoreBtn());
+			
+			score_panel.add(score_grid_panel);
+			comment_info_panel.add(score_panel, BorderLayout.SOUTH);
+			
+			
+			JSplitPane hor_split_pane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, getJScrollPane1(),comment_info_panel);
+			hor_split_pane.setDividerSize(3);
+			hor_split_pane.setDividerLocation(250);
+			hor_split_pane.setOneTouchExpandable(true);
+			
+			judgePanel.add(hor_split_pane);
+			
+		}
+		return judgePanel;
+	}
+	
+	private JPanel getReportPanel() {
+		if (reportPanel == null) {
+			reportPanel = new JPanel();
+			reportPanel.setLayout(new BorderLayout());
+			
+			JPanel comments_info_panel = new JPanel();
+			comments_info_panel.setLayout(new BorderLayout());
+			comments_info_panel.add(getJTreeCommentTypeComboBox(),BorderLayout.NORTH);
+			comments_info_panel.add(getJTreeCommentInfoScrollPane(),BorderLayout.CENTER);
+			
+			JSplitPane ver_split_pane = new JSplitPane(JSplitPane.VERTICAL_SPLIT,getJTreeStatInfoScrollPane(),comments_info_panel);
+			ver_split_pane.setDividerSize(3);
+			ver_split_pane.setOneTouchExpandable(true);
+			ver_split_pane.setDividerLocation(100);
+			JSplitPane hor_split_pane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,getJTreeScrollPane(),ver_split_pane);
+			hor_split_pane.setDividerSize(3);
+			hor_split_pane.setOneTouchExpandable(true);
+			hor_split_pane.setDividerLocation(150);
+			
+			reportPanel.add(hor_split_pane);
+		}
+		return reportPanel;
+	}
 
 	private void loadJudgeInfo() {
 		// 引入一个布尔变量judgePanelInitialized， 是的judge面板只初始化一次
@@ -1164,7 +1141,7 @@ public class EvaluationTool extends JFrame {
 	}
 
 	public static void main(String[] args) throws Exception {
-		// BeautyEyeLNFHelper.launchBeautyEyeLNF();
+//		BeautyEyeLNFHelper.launchBeautyEyeLNF();
 		JFrame frame = new EvaluationTool();
 		frame.setVisible(true);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -1414,6 +1391,35 @@ public class EvaluationTool extends JFrame {
 			updateCommentPathList(1, selected_type);
 		}
 	}
+	
+	private void jTree_comment_type_comboBox_ItemStateChanged(ItemEvent event) {
+		@SuppressWarnings("unchecked")
+		Object selected_item = ((JComboBox<String>) event.getSource()).getSelectedItem();
+		
+		if(selected_item != null) {
+			String selected_type = selected_item.toString();
+			StringBuilder stat_content = new StringBuilder();
+			StringBuilder content = new StringBuilder();
+			for(Map.Entry<String, String> entry: tree_comment_info.entrySet()) {
+				if(selected_type.equals("ALL") || comment_types.get(entry.getKey()).equals(selected_type)) {
+					content.append(entry.getValue() + "<br/><br/>");
+				}
+			}
+			comments_info_jEditorPane.setText(content.toString());
+			
+			if(!selected_type.equals("ALL")) {
+				String[] split = stat_info.split("\n");
+				for(String s: split) {
+					if(s.startsWith(selected_type)) {
+						stat_content.append(s + "\n");
+					}
+				}
+				stat_info_jTextArea.setText(stat_content.toString());
+			} else {
+				stat_info_jTextArea.setText(stat_info);
+			}
+		}
+	}
 
 	private void source_code_url_labelMouseMouseClicked(MouseEvent event) {
 		try {
@@ -1487,7 +1493,12 @@ public class EvaluationTool extends JFrame {
 	private void jTreeValueChanged(TreeSelectionEvent e) {
 		stat_info_jTextArea.setText("处理中");
 		comments_info_jEditorPane.setText("处理中");
-				
+		if(tree_comment_info == null) {
+			tree_comment_info = new TreeMap<String, String>();
+		} else {
+			tree_comment_info.clear();
+		}
+		
 		backTask = new Thread(new BackgroundUpdateTask());
 		backTask.start();
 	}
@@ -1496,6 +1507,7 @@ public class EvaluationTool extends JFrame {
 
 		@Override
 		public void run() {
+			jTree_comment_type_comboBox.removeAllItems();
 			int mycouter = ++update_counter;
 			DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode) jTree0
 					.getLastSelectedPathComponent();
@@ -1510,6 +1522,8 @@ public class EvaluationTool extends JFrame {
 				StringBuilder info = new StringBuilder();
 				StringBuilder comments = new StringBuilder();
 				Map<String, Integer> typeCounter = new HashMap<String, Integer>();
+				Set<String> templates = new TreeSet<String>();
+				
 				for(Map.Entry<String, String> entry: allComments.entrySet()) {
 					String path = entry.getKey();
 					if(path.startsWith(selectedPath)) {
@@ -1526,6 +1540,7 @@ public class EvaluationTool extends JFrame {
 						} else {
 							filename = path;
 						}
+						
 						StringBuilder url = new StringBuilder();
 						url.append(PropertiesUtil.getProperties().getProperty(
 								"mysql.data.gui.EvaluationTool.sourcecode_url_prefix"));
@@ -1537,20 +1552,35 @@ public class EvaluationTool extends JFrame {
 							url.append("#" + getLineNo(path));
 						}
 						
-						comments.append("<a href = '" + url.toString() + "'>" + path + "</a><br/>");
-						comments.append(getColoredInfo(path));
+						String title = "<a href = '" + url.toString() + "'>" + path + "</a><br/>";
+						comments.append(title);
+						
+						templates.add(type + ":" + ca.loadNewTemplate(path).toString());
+						String color_info = getColoredInfo(path);
+						comments.append(color_info);
 						comments.append("<br/><br/>");
 						
+						tree_comment_info.put(path, title + color_info);
 					}
 				}
 				
-				for(Map.Entry<String, Integer> entry: typeCounter.entrySet()) {
-					info.append(entry.getKey() + ":" + entry.getValue() + "\r\n");
+				for(String t : templates) {
+					if(!t.equals(""))
+						info.append(t + "\r\n");
 				}
 				
+//				for(Map.Entry<String, Integer> entry: typeCounter.entrySet()) {
+//					info.append(entry.getKey() + ":" + entry.getValue() + "\r\n");
+//				}
+				
 				if(mycouter == update_counter){
-					stat_info_jTextArea.setText(info.toString());
+					stat_info = info.toString();
+					stat_info_jTextArea.setText(stat_info);
 					comments_info_jEditorPane.setText(comments.toString());
+					jTree_comment_type_comboBox.addItem("ALL");
+					for(String t: typeCounter.keySet()) {
+						jTree_comment_type_comboBox.addItem(t);
+					}
 				} else {
 					System.out.println("cancle " + selectedPath);
 				}

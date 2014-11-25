@@ -47,7 +47,7 @@ public class CommentAnalyzer {
 	private static Logger logger = Logger.getLogger(CommentAnalyzer.class);
 	public static boolean LOADDATATODB = false;
 	private FilterBase seg_filter = new CategoryTagFilter(new HtmlFilter(new IscasLinkFilter(new PunctuationFilter(new SourceCodeLineByLineCommentFilter(new  DoNothingFilter())))));
-	private FilterBase seg_filter_withPunc = new CategoryTagFilter(new IscasLinkFilter(new HtmlFilter(new SourceCodeLineByLineCommentFilter(new DoNothingFilter()))));
+	private FilterBase seg_filter_withPunc = new CategoryTagFilter(new HtmlFilter(new IscasLinkFilter(new SourceCodeLineByLineCommentFilter(new DoNothingFilter()))));
 	private Properties props;
 	private Connection source_conn;
 	private Connection storage_conn;
@@ -57,7 +57,6 @@ public class CommentAnalyzer {
 	private boolean loadFromFile;
 
 	public CommentAnalyzer(boolean loadFromFile) {
-		logger.setLevel(Level.WARN);
 		this.loadFromFile = loadFromFile;
 		props = PropertiesUtil.getProperties();
 		StringBuilder sourceurl = new StringBuilder();
@@ -152,10 +151,27 @@ public class CommentAnalyzer {
 		CommentAnalyzer ca = new CommentAnalyzer(loadFromFile);
 //		LOADDATATODB = true;
 		if (LOADDATATODB) {
-			ca.loadDataToAnalysisDB();
+			ca.loadDataToAnalysisDB(false, false, true);
 		}
 //		ca.extractNewTemplate();
 		logger.info("done");
+	}
+	
+	/**
+	 * 过滤掉模板中的纯英文
+	 * @param input  原始模板
+	 * @return   过滤掉英文片段的模板
+	 */
+	private List<String> filterTemplate(List<String> input) {
+		List<String> result = new ArrayList<String>();
+		for(String s: input) {
+			if(s.replaceAll("[^\u4e00-\u9fa5]", "").equals("")){
+				continue;
+			} else {
+				result.add(s);
+			}
+		}
+		return result;
 	}
 	
 	public Map<String, List<String>> extractNewTemplate() {
@@ -178,7 +194,7 @@ public class CommentAnalyzer {
 				logger.info("#" + counter + "\t" + path);
 				String comment = entry.getValue();
 				
-//				path = "/arch/arm/boot/compressed/mmcif-sh7372.c/MMCIF_BASE(0016)(linux-3.5.4)";
+//				path = "/block/deadline-iosched.c/SHOW_FUNCTION(0395)(linux-3.5.4)";
 //				comment = allComments.get(path);
 				
 				if(comment_types.get(path).equals("file")){
@@ -197,7 +213,10 @@ public class CommentAnalyzer {
 				List<String> current_comment_seg = word_seg.segmentation(comment, WordSeg.NO_POS_TAG, seg_filter);
 				for(String other_comment : fileComments.values()) {
 					List<String> comment_seg = word_seg.segmentation(other_comment, WordSeg.NO_POS_TAG, seg_filter);
-					List<String> temp_template = algo.longestCommonString(current_comment_seg, comment_seg);
+					
+					//纯英文的片段就不放入模板中了
+					List<String> temp_template = filterTemplate(algo.longestCommonString(current_comment_seg, comment_seg));
+					
 					int len = algo.sumLen(temp_template);
 					if(len > longest_template_len) {
 						longest_template_len = len;
@@ -299,85 +318,94 @@ public class CommentAnalyzer {
 		return sourcecode.toString();
 	}
 
-	public void loadDataToAnalysisDB() throws SQLException, IOException {
+	public void loadDataToAnalysisDB(boolean load_comment, boolean load_template, boolean load_newtemplate) throws SQLException, IOException {
 		Map<String, String> comments = getAllComments(loadFromFile);
 		Statement stmt = storage_conn.createStatement();
 
 		// 填充comment表
-		for (Map.Entry<String, String> entry : comments.entrySet()) {
-			StringBuilder sql = new StringBuilder();
-			String path = entry.getKey().trim();
-			String content = entry.getValue().trim();
-			sql.append(
-					"insert into comment(comment_path,origin_comment,filtered_comment,filetag_count,lxr_type,path_file) values(\"")
-					.append(path)
-					.append("\",\"")
-					// TODO:BUG WITH
-					// ##**##/arch/arm/kernel/kprobes-test.h/TESTCASE_END(0179)(linux-3.5.4)
-					// 单 \ 转双 \\， \" 转 \\"
-					.append(content.replaceAll("\\\\", "\\\\\\\\").replaceAll(
-							"\\\"", "\\\\\""))
-					.append("\",\"")
-					.append(filterComment(content).replaceAll("\\\\",
-							"\\\\\\\\").replaceAll("\\\"", "\\\\\""))
-					.append("\",").append(countFileTag(content)).append(",\"")
-					.append(getType(path, loadFromFile)).append("\",\"")
-					.append(getCommentFileName(path)).append("\");");
-			stmt.executeUpdate(sql.toString());
-			logger.info("inserted " + path);
-		}
-
-		// 填充template
-
-		for (String lxrtype : getAllCommentedLxrtypes()) {
-			for (String filePath : getAllCommentedFilepath()) {
-				List<String> fileComments = getFileComments(filePath, lxrtype);
-				Set<String> strictTemplate = extractTemplate(fileComments,
-						TXTCommentAnalyzer.EXTRACTPOLICY_STRICT);
-				Set<String> middleTemplate = extractTemplate(fileComments,
-						TXTCommentAnalyzer.EXTRACTPOLICY_MIDDLE);
-				Set<String> looseTemplate = extractTemplate(fileComments,
-						TXTCommentAnalyzer.EXTRACTPOLICY_LOOSE);
+		
+		if(load_comment){
+			for (Map.Entry<String, String> entry : comments.entrySet()) {
 				StringBuilder sql = new StringBuilder();
+				String path = entry.getKey().trim();
+				String content = entry.getValue().trim();
 				sql.append(
-						"insert into template(path_file,lxr_type,strict_template,middle_template,loose_template) values(\"")
-						.append(filePath).append("\",\"").append(lxrtype)
-						.append("\",\"");
-				for (String t : strictTemplate) {
-					sql.append(t + ";");
-				}
-				sql.append("\",\"");
-				for (String t : middleTemplate) {
-					sql.append(t + ";");
-				}
-				sql.append("\",\"");
-				for (String t : looseTemplate) {
-					sql.append(t + ";");
-				}
-				sql.append("\");");
-				logger.info(filePath + "#" + lxrtype);
+						"insert into comment(comment_path,origin_comment,filtered_comment,filetag_count,lxr_type,path_file) values(\"")
+						.append(path)
+						.append("\",\"")
+						// TODO:BUG WITH
+						// ##**##/arch/arm/kernel/kprobes-test.h/TESTCASE_END(0179)(linux-3.5.4)
+						// 单 \ 转双 \\， \" 转 \\"
+						.append(content.replaceAll("\\\\", "\\\\\\\\").replaceAll(
+								"\\\"", "\\\\\""))
+						.append("\",\"")
+						.append(filterComment(content).replaceAll("\\\\",
+								"\\\\\\\\").replaceAll("\\\"", "\\\\\""))
+						.append("\",").append(countFileTag(content)).append(",\"")
+						.append(getType(path, loadFromFile)).append("\",\"")
+						.append(getCommentFileName(path)).append("\");");
 				stmt.executeUpdate(sql.toString());
+				logger.info("inserted " + path);
 			}
 		}
 		
-		//填充 new_template
-		comment_types = loadCommentsTypes();
-		for(Map.Entry<String, List<String>> entry : extractNewTemplate().entrySet()) {
-			String path = entry.getKey();
-			List<String> template = entry.getValue();
-			StringBuilder sql = new StringBuilder();
-			sql.append("insert into new_template(path_file, lxr_type, new_template) values(\"")
-				.append(path)
-				.append("\",\"")
-				.append(comment_types.get(path))
-				.append("\",\"");
-			for(String s: template) {
-				sql.append(s + ";");
+
+		// 填充template
+		if(load_template){
+			for (String lxrtype : getAllCommentedLxrtypes()) {
+				for (String filePath : getAllCommentedFilepath()) {
+					List<String> fileComments = getFileComments(filePath, lxrtype);
+					Set<String> strictTemplate = extractTemplate(fileComments,
+							TXTCommentAnalyzer.EXTRACTPOLICY_STRICT);
+					Set<String> middleTemplate = extractTemplate(fileComments,
+							TXTCommentAnalyzer.EXTRACTPOLICY_MIDDLE);
+					Set<String> looseTemplate = extractTemplate(fileComments,
+							TXTCommentAnalyzer.EXTRACTPOLICY_LOOSE);
+					StringBuilder sql = new StringBuilder();
+					sql.append(
+							"insert into template(path_file,lxr_type,strict_template,middle_template,loose_template) values(\"")
+							.append(filePath).append("\",\"").append(lxrtype)
+							.append("\",\"");
+					for (String t : strictTemplate) {
+						sql.append(t + ";");
+					}
+					sql.append("\",\"");
+					for (String t : middleTemplate) {
+						sql.append(t + ";");
+					}
+					sql.append("\",\"");
+					for (String t : looseTemplate) {
+						sql.append(t + ";");
+					}
+					sql.append("\");");
+					logger.info(filePath + "#" + lxrtype);
+					stmt.executeUpdate(sql.toString());
+				}
 			}
-			sql.append("\");");
-			stmt.executeUpdate(sql.toString());
-			logger.info(path);
 		}
+		
+		
+		//填充 new_template
+		if(load_newtemplate){
+			comment_types = loadCommentsTypes();
+			for(Map.Entry<String, List<String>> entry : extractNewTemplate().entrySet()) {
+				String path = entry.getKey();
+				List<String> template = entry.getValue();
+				StringBuilder sql = new StringBuilder();
+				sql.append("insert into new_template(path_file, lxr_type, new_template) values(\"")
+					.append(path)
+					.append("\",\"")
+					.append(comment_types.get(path))
+					.append("\",\"");
+				for(String s: template) {
+					sql.append(s + ";");
+				}
+				sql.append("\");");
+				stmt.executeUpdate(sql.toString());
+				logger.info(path);
+			}
+		}
+		
 		
 		stmt.close();
 		closeDBConnection();
@@ -902,7 +930,7 @@ public class CommentAnalyzer {
 			throws SQLException {
 		if (LOADDATATODB) {
 			try {
-				loadDataToAnalysisDB();
+				loadDataToAnalysisDB(true, false, false);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -923,7 +951,7 @@ public class CommentAnalyzer {
 			String lxr_type) throws SQLException {
 		if (LOADDATATODB) {
 			try {
-				loadDataToAnalysisDB();
+				loadDataToAnalysisDB(false, true, false);
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
@@ -958,6 +986,11 @@ public class CommentAnalyzer {
 			int nextIndexInTemplate = 0;
 			
 			while(nextIndex < current_comment_seg.size() && nextIndexInTemplate < longest_template.size()) {
+				//TODO: 因为提取模板时，先过滤了标点，所以会将注释中连续的变量名放入模板中，匹配时，现在去掉
+				if(longest_template.get(nextIndexInTemplate).replaceAll("[^\u4e00-\u9fa5]", "").equals("")){
+					++nextIndexInTemplate;
+					continue;
+				}
 				if(!seg_filter.getText(current_comment_seg.get(nextIndex)).equals(longest_template.get(nextIndexInTemplate))){
 					template_format.append(current_comment_seg.get(nextIndex));
 					logger.info("#APPEND#:\t" + current_comment_seg.get(nextIndex));
@@ -989,7 +1022,7 @@ public class CommentAnalyzer {
 		return sb.toString();
 	}
 	
-	private List<String> loadNewTemplate(String path) {
+	public List<String> loadNewTemplate(String path) {
 		List<String> template = new ArrayList<String>();
 		try {
 			Statement stmt = this.storage_conn.createStatement();
