@@ -670,6 +670,13 @@ public class EvaluationTool extends JFrame {
 			comment_type_combo_box.setDoubleBuffered(false);
 			comment_type_combo_box.setEnabled(false);
 			comment_type_combo_box.setBorder(null);
+			comment_type_combo_box.addItemListener(new ItemListener() {
+				
+				@Override
+				public void itemStateChanged(ItemEvent e) {
+					filter_view_comment();
+				}
+			});
 		}
 		return comment_type_combo_box;
 	}
@@ -938,6 +945,19 @@ public class EvaluationTool extends JFrame {
 					view_path_text_fieldMouseMouseClicked(event);
 				}
 			});
+			
+			view_path_text_field.addFocusListener(new FocusListener() {
+				
+				@Override
+				public void focusLost(FocusEvent e) {
+					update_view_comment();
+				}
+				
+				@Override
+				public void focusGained(FocusEvent e) {
+					
+				}
+			});
 		}
 		return view_path_text_field;
 	}
@@ -991,11 +1011,11 @@ public class EvaluationTool extends JFrame {
 			
 			comment_path_panel.add(getJLabel0(),BorderLayout.WEST);
 			comment_path_panel.add(getJTextField0(),BorderLayout.CENTER);
-			comment_path_panel.add(getCommentSearchBtn(),BorderLayout.EAST);
+//			comment_path_panel.add(getCommentSearchBtn(),BorderLayout.EAST);
 			
 			comment_type_panel.add(getJLabel1(),BorderLayout.WEST);
 			comment_type_panel.add(getCommentTypeComboBox(),BorderLayout.CENTER);
-			comment_type_panel.add(getCommentFilterBtn(),BorderLayout.EAST);
+//			comment_type_panel.add(getCommentFilterBtn(),BorderLayout.EAST);
 			
 			header_panel.add(comment_path_panel);
 			header_panel.add(comment_type_panel);
@@ -1202,6 +1222,10 @@ public class EvaluationTool extends JFrame {
 	}
 
 	private void comment_search_btnMouseMouseClicked(MouseEvent event) {
+		update_view_comment();
+	}
+	
+	private void update_view_comment() {
 		String path = view_path_text_field.getText();
 
 		if (path.length() != 0) {
@@ -1230,6 +1254,10 @@ public class EvaluationTool extends JFrame {
 	}
 
 	private void comment_filter_btnMouseMouseClicked(MouseEvent event) {
+		filter_view_comment();
+	}
+	
+	private void filter_view_comment() {
 		if (comment_type_combo_box.getSelectedItem() != null) {
 			String type = comment_type_combo_box.getSelectedItem().toString();
 			StringBuilder content = new StringBuilder();
