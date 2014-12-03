@@ -26,46 +26,49 @@ import java.util.TreeSet;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import org.apache.log4j.Level;
-import org.apache.log4j.Logger;
-
-import tool.nlpir.WordSeg;
 import mysql.data.algorithms.AlgorithmsUtil;
 import mysql.data.analysis.quality.CommentsQualityAnalysis;
 import mysql.data.analysisDB.entity.CommentTableInfo;
 import mysql.data.analysisDB.entity.TemplateTableInfo;
-import mysql.data.filter.CategoryTagFilter;
-import mysql.data.filter.DoNothingFilter;
 import mysql.data.filter.FilterBase;
-import mysql.data.filter.HtmlFilter;
-import mysql.data.filter.IscasLinkFilter;
-import mysql.data.filter.PunctuationFilter;
-import mysql.data.filter.SourceCodeLineByLineCommentFilter;
 import mysql.data.filter.TemplateCandidateFilter;
 import mysql.data.util.PropertiesUtil;
 
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
+import tool.nlpir.WordSeg;
+
 public class CommentAnalyzer {
 	private static Logger logger = Logger.getLogger(CommentAnalyzer.class);
-	
+
 	public static final int TEMPLATE_SAME_TYPE = 1;
+
 	public static final int TEMPLATE_SAME_EDITOR = 2;
-	
+
 	public static boolean LOADDATATODB = false;
+
 	private Properties props;
+
 	private Connection source_conn;
+
 	private Connection storage_conn;
+
 	private Connection lxr_conn;
+
 	private Map<String, String> allComments = null;
+
 	private Map<String, String> comment_types = null;
-	//键为分析人员的id，值为所有他撰写注释的注释路径
+
+	// 键为分析人员的id，值为所有他撰写注释的注释路径
 	private Map<String, Set<String>> analysist_paths = null;
-	//键为注释路径，值为所有编辑过该条注释的分析人员的id
+
+	// 键为注释路径，值为所有编辑过该条注释的分析人员的id
 	private Map<String, Set<String>> path_editors = null;
-	
+
 	private boolean loadFromFile;
 
 	public CommentAnalyzer(boolean loadFromFile) {
-		logger.setLevel(Level.WARN);
 		this.loadFromFile = loadFromFile;
 		props = PropertiesUtil.getProperties();
 		StringBuilder sourceurl = new StringBuilder();
@@ -158,24 +161,26 @@ public class CommentAnalyzer {
 		logger.setLevel(Level.INFO);
 		boolean loadFromFile = true;
 		CommentAnalyzer ca = new CommentAnalyzer(loadFromFile);
-//		LOADDATATODB = true;
+		// LOADDATATODB = true;
 		if (LOADDATATODB) {
 			ca.loadDataToAnalysisDB(false, false, true);
 		}
-//		ca.extractTemplateFromSameEditor();
-//		ca.extractNewTemplate();
+		// ca.extractTemplateFromSameEditor();
+		// ca.extractNewTemplate();
 		logger.info("done");
 	}
-	
+
 	/**
 	 * 过滤掉模板中的纯英文
-	 * @param input  原始模板
-	 * @return   过滤掉英文片段的模板
+	 * 
+	 * @param input
+	 *            原始模板
+	 * @return 过滤掉英文片段的模板
 	 */
 	private List<String> filterTemplate(List<String> input) {
 		List<String> result = new ArrayList<String>();
-		for(String s: input) {
-			if(s.replaceAll("[^\u4e00-\u9fa5]", "").equals("")){
+		for (String s : input) {
+			if (s.replaceAll("[^\u4e00-\u9fa5]", "").equals("")) {
 				continue;
 			} else {
 				result.add(s);
@@ -183,10 +188,11 @@ public class CommentAnalyzer {
 		}
 		return result;
 	}
-	
+
 	/**
 	 * 基于同文件、同类型，分词后抽取最长公共子序列的策略抽取模板
-	 * @return   返回值， key是path，值是模板
+	 * 
+	 * @return 返回值， key是path，值是模板
 	 */
 	public Map<String, List<String>> extractNewTemplate() {
 		Map<String, List<String>> result = new TreeMap<String, List<String>>();
@@ -194,139 +200,164 @@ public class CommentAnalyzer {
 		try {
 			WordSeg word_seg = new WordSeg();
 			AlgorithmsUtil algo = new AlgorithmsUtil();
-			
-//			PrintWriter writer = new PrintWriter(new File(props.getProperty("mysql.data.DataSource.rootPath") + "/" + props.getProperty("mysql.data.analysis.CommentAnalyzer.newTemplateFile")));
-//			PrintWriter txtwriter = new PrintWriter(new File(props.getProperty("mysql.data.DataSource.rootPath") + "/" + props.getProperty("mysql.data.analysis.CommentAnalyzer.newTemplateFile") + ".txt"));
+
+			// PrintWriter writer = new PrintWriter(new
+			// File(props.getProperty("mysql.data.DataSource.rootPath") + "/" +
+			// props.getProperty("mysql.data.analysis.CommentAnalyzer.newTemplateFile")));
+			// PrintWriter txtwriter = new PrintWriter(new
+			// File(props.getProperty("mysql.data.DataSource.rootPath") + "/" +
+			// props.getProperty("mysql.data.analysis.CommentAnalyzer.newTemplateFile")
+			// + ".txt"));
 			allComments = getAllComments();
 			comment_types = loadCommentsTypes();
-			
+
 			int counter = 0;
-			
-			for(Map.Entry<String, String> entry: allComments.entrySet()) {
+
+			for (Map.Entry<String, String> entry : allComments.entrySet()) {
 				String path = entry.getKey();
 				++counter;
 				logger.info("#" + counter + "\t" + path);
 				String comment = entry.getValue();
-				
-//				path = "/arch/arm/boot/compressed/misc.c/decompress_kernel(0134)(linux-3.5.4)";
-//				comment = allComments.get(path);
-				
-				if(comment_types.get(path).equals("file")){
+
+				// path =
+				// "/arch/arm/boot/compressed/misc.c/decompress_kernel(0134)(linux-3.5.4)";
+				// comment = allComments.get(path);
+
+				if (comment_types.get(path).equals("file")) {
 					continue;
 				}
-				
-//				writer.write(path + "," + comment_types.get(path).replaceAll(",", " ") + ",");
-//				txtwriter.write(props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter") + "\t" + path + "\r\n");
-//				
-//				txtwriter.write(seg_filter_withPunc.getText(comment) + "\r\n" + props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter") + "\r\n");
-				
-				Map<String, String> fileComments = getFileCommentsWithPath(path, comment_types.get(path));
-				
+
+				// writer.write(path + "," +
+				// comment_types.get(path).replaceAll(",", " ") + ",");
+				// txtwriter.write(props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter")
+				// + "\t" + path + "\r\n");
+				//
+				// txtwriter.write(seg_filter_withPunc.getText(comment) + "\r\n"
+				// +
+				// props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter")
+				// + "\r\n");
+
+				Map<String, String> fileComments = getFileCommentsWithPath(
+						path, comment_types.get(path));
+
 				int longest_template_len = 0;
 				List<String> longest_template = new ArrayList<String>();
-				List<String> current_comment_seg = word_seg.segmentation(comment, WordSeg.NO_POS_TAG, WordSeg.SEG_FILTER);
-				for(String other_comment : fileComments.values()) {
-					List<String> comment_seg = word_seg.segmentation(other_comment, WordSeg.NO_POS_TAG, WordSeg.SEG_FILTER);
-					
-					//纯英文的片段就不放入模板中了
-					List<String> temp_template = filterTemplate(algo.longestCommonString(current_comment_seg, comment_seg));
-					
+				List<String> current_comment_seg = word_seg.segmentation(
+						comment, WordSeg.NO_POS_TAG, WordSeg.SEG_FILTER);
+				for (String other_comment : fileComments.values()) {
+					List<String> comment_seg = word_seg.segmentation(
+							other_comment, WordSeg.NO_POS_TAG,
+							WordSeg.SEG_FILTER);
+
+					// 纯英文的片段就不放入模板中了
+					List<String> temp_template = filterTemplate(algo
+							.longestCommonString(current_comment_seg,
+									comment_seg));
+
 					int len = algo.sumLen(temp_template);
-					if(len > longest_template_len) {
+					if (len > longest_template_len) {
 						longest_template_len = len;
 						longest_template = temp_template;
 					}
 				}
-				
-//				int current = algo.sumLen(current_comment_seg);
-//				writer.write(current + ",");
-//				int remain = algo.sumLen(current_comment_seg) - longest_template_len;
-//				writer.write(remain + ",");
-//				double ratio = (double) remain / current;
-//				writer.write(ratio + ",");
-//				
-//				if(current_comment_seg != null) {
-////					txtwriter.write(current_comment_seg.toString() + "\r\n");
-//				}else {
-//					txtwriter.write("current_comment_seg is null" + "\r\n");
-//					writer.write("\r\n");
-//					txtwriter.write("\r\n\r\n");
-//					continue;
-//				}
-//				
-//				if(longest_template != null) {
-////					txtwriter.write(longest_template.toString() + "\r\n");
-//				} else {
-//					txtwriter.write("longest_template is null" + "\r\n");
-//					writer.write("\r\n");
-//					txtwriter.write("\r\n\r\n");
-//					continue;
-//				}
-				
-				
-//				int nextIndex = 0;
-//				int nextIndexInTemplate = 0;
-//				StringBuilder template_format = new StringBuilder();
-//				current_comment_seg = word_seg.segmentation(comment, WordSeg.NO_POS_TAG, seg_filter_withPunc);   //此时要复现模板的效果，不过滤标点符号
-//				while(nextIndex < current_comment_seg.size() && nextIndexInTemplate < longest_template.size()) {
-//					if(!seg_filter.getText(current_comment_seg.get(nextIndex)).equals(longest_template.get(nextIndexInTemplate))){
-//						writer.write(current_comment_seg.get(nextIndex) + ";");
-//						template_format.append(" ");
-//						++nextIndex;
-//					} else {
-//						template_format.append(current_comment_seg.get(nextIndex));
-//						++nextIndex;
-//						++nextIndexInTemplate;
-//					}
-//				}
-//				
-//				while(nextIndex < current_comment_seg.size()) {
-//					writer.write(current_comment_seg.get(nextIndex) + ";");
-//					template_format.append(" ");
-//					++nextIndex;
-//				}
-//				
-//				txtwriter.write(template_format.toString());
-//				
-//				writer.write("\r\n");
-//				txtwriter.write("\r\n\r\n");
-				
+
+				// int current = algo.sumLen(current_comment_seg);
+				// writer.write(current + ",");
+				// int remain = algo.sumLen(current_comment_seg) -
+				// longest_template_len;
+				// writer.write(remain + ",");
+				// double ratio = (double) remain / current;
+				// writer.write(ratio + ",");
+				//
+				// if(current_comment_seg != null) {
+				// // txtwriter.write(current_comment_seg.toString() + "\r\n");
+				// }else {
+				// txtwriter.write("current_comment_seg is null" + "\r\n");
+				// writer.write("\r\n");
+				// txtwriter.write("\r\n\r\n");
+				// continue;
+				// }
+				//
+				// if(longest_template != null) {
+				// // txtwriter.write(longest_template.toString() + "\r\n");
+				// } else {
+				// txtwriter.write("longest_template is null" + "\r\n");
+				// writer.write("\r\n");
+				// txtwriter.write("\r\n\r\n");
+				// continue;
+				// }
+
+				// int nextIndex = 0;
+				// int nextIndexInTemplate = 0;
+				// StringBuilder template_format = new StringBuilder();
+				// current_comment_seg = word_seg.segmentation(comment,
+				// WordSeg.NO_POS_TAG, seg_filter_withPunc);
+				// //此时要复现模板的效果，不过滤标点符号
+				// while(nextIndex < current_comment_seg.size() &&
+				// nextIndexInTemplate < longest_template.size()) {
+				// if(!seg_filter.getText(current_comment_seg.get(nextIndex)).equals(longest_template.get(nextIndexInTemplate))){
+				// writer.write(current_comment_seg.get(nextIndex) + ";");
+				// template_format.append(" ");
+				// ++nextIndex;
+				// } else {
+				// template_format.append(current_comment_seg.get(nextIndex));
+				// ++nextIndex;
+				// ++nextIndexInTemplate;
+				// }
+				// }
+				//
+				// while(nextIndex < current_comment_seg.size()) {
+				// writer.write(current_comment_seg.get(nextIndex) + ";");
+				// template_format.append(" ");
+				// ++nextIndex;
+				// }
+				//
+				// txtwriter.write(template_format.toString());
+				//
+				// writer.write("\r\n");
+				// txtwriter.write("\r\n\r\n");
+
 				result.put(path, longest_template);
 				logger.info("#finish" + "\t" + path);
 			}
-			
-//			writer.flush();
-//			writer.close();
-//			txtwriter.flush();
-//			txtwriter.close();
-			
+
+			// writer.flush();
+			// writer.close();
+			// txtwriter.flush();
+			// txtwriter.close();
+
 			word_seg.exit();
-			
+
 		} catch (SQLException | IOException e) {
 			e.printStackTrace();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
-		
+
 		return result;
 	}
-	
+
 	/**
 	 * 把分词程序分得太碎的词组重新拼在一起，结合原注释的分词结果和模板的分词结果，如果模板中相邻的两个词在原注释中也相邻，则将他们拼在一起
+	 * 
 	 * @param current_comment_seg
 	 * @param longest_template
 	 * @return
 	 */
-	public List<String> joinTemplate(List<String> current_comment_seg, List<String> longest_template) {
+	public List<String> joinTemplate(List<String> current_comment_seg,
+			List<String> longest_template) {
 		List<String> result = new ArrayList<String>();
-		
-		if(current_comment_seg != null && longest_template != null) {
+
+		if (current_comment_seg != null && longest_template != null) {
 			int nextIndex = 0;
 			int nextIndexInTemplate = 0;
 			StringBuilder template_format = new StringBuilder();
-			while(nextIndex < current_comment_seg.size() && nextIndexInTemplate < longest_template.size()) {
-				if(!WordSeg.SEG_FILTER.getText(current_comment_seg.get(nextIndex)).equals(longest_template.get(nextIndexInTemplate))){
-					if(template_format.toString().length() != 0) {
+			while (nextIndex < current_comment_seg.size()
+					&& nextIndexInTemplate < longest_template.size()) {
+				if (!WordSeg.SEG_FILTER.getText(
+						current_comment_seg.get(nextIndex)).equals(
+						longest_template.get(nextIndexInTemplate))) {
+					if (template_format.toString().length() != 0) {
 						result.add(template_format.toString());
 						template_format = new StringBuilder();
 					}
@@ -340,31 +371,32 @@ public class CommentAnalyzer {
 		}
 		return result;
 	}
-	
-	public List<String> joinTemplate(String comment, List<String> longest_template) {
-		List<String> result = new ArrayList<String> ();
-		
-		if(comment != null && longest_template != null) {
+
+	public List<String> joinTemplate(String comment,
+			List<String> longest_template) {
+		List<String> result = new ArrayList<String>();
+
+		if (comment != null && longest_template != null) {
 			StringBuilder part = new StringBuilder();
-			for(int i = 0; i < longest_template.size();) {
-				if(comment.contains(part.toString() + longest_template.get(i))) {
+			for (int i = 0; i < longest_template.size();) {
+				if (comment.contains(part.toString() + longest_template.get(i))) {
 					part.append(longest_template.get(i));
 					++i;
-				}else {
-					if(part.toString().length() != 0) {
+				} else {
+					if (part.toString().length() != 0) {
 						result.add(part.toString());
 						part = new StringBuilder();
 					}
 				}
 			}
-			if(part.toString().length() != 0) {
+			if (part.toString().length() != 0) {
 				result.add(part.toString());
 			}
 		}
-		
+
 		return result;
 	}
-	
+
 	public Map<String, List<String>> extractTemplateFromSameEditor() {
 		Map<String, List<String>> result = new TreeMap<String, List<String>>();
 		logger.info("extractTemplateFromSameEditor");
@@ -391,7 +423,8 @@ public class CommentAnalyzer {
 				}
 
 				// 先把同文件的所有注释取出
-				Map<String, String> fileComments = getFileCommentsWithPath(path, "ALL");
+				Map<String, String> fileComments = getFileCommentsWithPath(
+						path, "ALL");
 
 				Set<String> path_set = fileComments.keySet();
 				for (String one_path : path_set) {
@@ -410,7 +443,8 @@ public class CommentAnalyzer {
 						comment, WordSeg.NO_POS_TAG, WordSeg.SEG_FILTER);
 				for (String other_comment : fileComments.values()) {
 					List<String> comment_seg = word_seg.segmentation(
-							other_comment, WordSeg.NO_POS_TAG, WordSeg.SEG_FILTER);
+							other_comment, WordSeg.NO_POS_TAG,
+							WordSeg.SEG_FILTER);
 
 					// 纯英文的片段就不放入模板中了
 					List<String> temp_template = filterTemplate(algo
@@ -423,7 +457,7 @@ public class CommentAnalyzer {
 						longest_template = temp_template;
 					}
 				}
-				
+
 				logger.info("#finish" + "\t" + path);
 				result.put(path, longest_template);
 			}
@@ -455,14 +489,16 @@ public class CommentAnalyzer {
 		reader.close();
 		return sourcecode.toString();
 	}
-	
-	public void loadDataToAnalysisDB(boolean load_comment, boolean load_template, boolean load_newtemplate) throws SQLException, IOException {
+
+	public void loadDataToAnalysisDB(boolean load_comment,
+			boolean load_template, boolean load_newtemplate)
+			throws SQLException, IOException {
 		Map<String, String> comments = getAllComments(loadFromFile);
 		Statement stmt = storage_conn.createStatement();
 
 		// 填充comment表
-		
-		if(load_comment){
+
+		if (load_comment) {
 			for (Map.Entry<String, String> entry : comments.entrySet()) {
 				StringBuilder sql = new StringBuilder();
 				String path = entry.getKey().trim();
@@ -474,25 +510,26 @@ public class CommentAnalyzer {
 						// TODO:BUG WITH
 						// ##**##/arch/arm/kernel/kprobes-test.h/TESTCASE_END(0179)(linux-3.5.4)
 						// 单 \ 转双 \\， \" 转 \\"
-						.append(content.replaceAll("\\\\", "\\\\\\\\").replaceAll(
-								"\\\"", "\\\\\""))
+						.append(content.replaceAll("\\\\", "\\\\\\\\")
+								.replaceAll("\\\"", "\\\\\""))
 						.append("\",\"")
 						.append(filterComment(content).replaceAll("\\\\",
 								"\\\\\\\\").replaceAll("\\\"", "\\\\\""))
-						.append("\",").append(countFileTag(content)).append(",\"")
-						.append(getType(path, loadFromFile)).append("\",\"")
-						.append(getCommentFileName(path)).append("\");");
+						.append("\",").append(countFileTag(content))
+						.append(",\"").append(getType(path, loadFromFile))
+						.append("\",\"").append(getCommentFileName(path))
+						.append("\");");
 				stmt.executeUpdate(sql.toString());
 				logger.info("inserted " + path);
 			}
 		}
-		
 
 		// 填充template
-		if(load_template){
+		if (load_template) {
 			for (String lxrtype : getAllCommentedLxrtypes()) {
 				for (String filePath : getAllCommentedFilepath()) {
-					List<String> fileComments = getFileComments(filePath, lxrtype);
+					List<String> fileComments = getFileComments(filePath,
+							lxrtype);
 					Set<String> strictTemplate = extractTemplate(fileComments,
 							TXTCommentAnalyzer.EXTRACTPOLICY_STRICT);
 					Set<String> middleTemplate = extractTemplate(fileComments,
@@ -521,34 +558,34 @@ public class CommentAnalyzer {
 				}
 			}
 		}
-		
-		
-		//填充 new_template
-		if(load_newtemplate){
+
+		// 填充 new_template
+		if (load_newtemplate) {
 			comment_types = loadCommentsTypes();
-			for(Map.Entry<String, List<String>> entry : extractNewTemplate().entrySet()) {
+			for (Map.Entry<String, List<String>> entry : extractNewTemplate()
+					.entrySet()) {
 				String path = entry.getKey();
 				List<String> template = entry.getValue();
 				StringBuilder sql = new StringBuilder();
-				sql.append("insert into new_template(path_file, lxr_type, new_template) values(\"")
-					.append(path)
-					.append("\",\"")
-					.append(comment_types.get(path))
-					.append("\",\"");
-				for(String s: template) {
+				sql.append(
+						"insert into new_template(path_file, lxr_type, new_template) values(\"")
+						.append(path).append("\",\"")
+						.append(comment_types.get(path)).append("\",\"");
+				for (String s : template) {
 					sql.append(s + ";");
 				}
 				sql.append("\");");
 				stmt.executeUpdate(sql.toString());
 				logger.info(path);
 			}
-			
-			for(Map.Entry<String, List<String>> entry : extractTemplateFromSameEditor().entrySet()) {
+
+			for (Map.Entry<String, List<String>> entry : extractTemplateFromSameEditor()
+					.entrySet()) {
 				String path = entry.getKey();
 				List<String> template = entry.getValue();
 				StringBuilder sql = new StringBuilder();
 				sql.append("update new_template set same_editor_template = \"");
-				for(String s: template) {
+				for (String s : template) {
 					sql.append(s + ";");
 				}
 				sql.append("\" where path_file = \"");
@@ -558,9 +595,9 @@ public class CommentAnalyzer {
 				logger.info(path);
 			}
 		}
-		
+
 		stmt.close();
-		closeDBConnection();
+		// closeDBConnection();
 	}
 
 	/**
@@ -579,36 +616,42 @@ public class CommentAnalyzer {
 		}
 		return line.replace("(linux-3.5.4)", "");
 	}
-	
-	
+
 	/**
 	 * 从文件中加载注释的lxr类型
+	 * 
 	 * @return 反馈注释类型的Map, key是path，value是类型
 	 */
 	public Map<String, String> loadCommentsTypes() {
-		if(comment_types == null) {
+		if (comment_types == null) {
 			try {
 				comment_types = new HashMap<String, String>();
-				BufferedReader reader = new BufferedReader(new FileReader(PropertiesUtil.getProperties().getProperty("mysql.data.CommentClassifier.commentsAndTypes")));
+				BufferedReader reader = new BufferedReader(
+						new FileReader(
+								PropertiesUtil
+										.getProperties()
+										.getProperty(
+												"mysql.data.CommentClassifier.commentsAndTypes")));
 				String oneline = "";
-				while((oneline = reader.readLine()) != null) {
+				while ((oneline = reader.readLine()) != null) {
 					String[] splits = oneline.split(",");
-					if(splits.length == 2)
+					if (splits.length == 2)
 						comment_types.put(splits[0].trim(), splits[1].trim());
 					else
-						comment_types.put(splits[0].trim(), oneline.substring(splits[0].length() + 1));
+						comment_types.put(splits[0].trim(),
+								oneline.substring(splits[0].length() + 1));
 				}
 				reader.close();
-				
+
 			} catch (FileNotFoundException e) {
 				e.printStackTrace();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			
-//			comment_types = filterPath(comment_types);
+
+			// comment_types = filterPath(comment_types);
 		}
-		
+
 		return comment_types;
 	}
 
@@ -694,8 +737,8 @@ public class CommentAnalyzer {
 
 	public String filterComment(String content) {
 		// 将原注释中的html标签， 以及 [[Category:]] [[File:]]这样的东西处理掉
-//		FilterBase filter = new CategoryTagFilter(new HtmlFilter(
-//				new DoNothingFilter()));
+		// FilterBase filter = new CategoryTagFilter(new HtmlFilter(
+		// new DoNothingFilter()));
 		return filterComment(WordSeg.SEG_FILTER, content);
 	}
 
@@ -712,9 +755,10 @@ public class CommentAnalyzer {
 		}
 		return count;
 	}
-	
+
 	/**
 	 * 默认即是从文件加载
+	 * 
 	 * @return
 	 */
 	public Map<String, String> getAllComments() {
@@ -728,7 +772,7 @@ public class CommentAnalyzer {
 
 	public Map<String, String> getAllComments(boolean loadFromFile)
 			throws SQLException, IOException {
-		if(allComments == null) {
+		if (allComments == null) {
 			if (loadFromFile) {
 				allComments = TXTCommentAnalyzer
 						.readContentToMap(
@@ -746,12 +790,13 @@ public class CommentAnalyzer {
 			}
 			allComments = filterPath(allComments);
 		}
-		
+
 		return allComments;
 	}
-	
+
 	/**
 	 * 过滤所有的注释路径，只保留有对应源码文件的注释
+	 * 
 	 * @param input
 	 * @return
 	 */
@@ -760,40 +805,40 @@ public class CommentAnalyzer {
 		Map<String, String> result = new TreeMap<String, String>();
 		try {
 			Set<String> valid_file_set = cqa.getAllEntries().keySet();
-			for(String path : input.keySet()) {
-				if(valid_file_set.contains(getCommentFileName(path))){
+			for (String path : input.keySet()) {
+				if (valid_file_set.contains(getCommentFileName(path))) {
 					result.put(path, input.get(path));
 				}
 			}
-		} catch (ClassNotFoundException | SQLException
-				| IOException e) {
+		} catch (ClassNotFoundException | SQLException | IOException e) {
 			e.printStackTrace();
 		}
-		
+
 		return result;
 	}
-	
-	
+
 	private void loadCommentEditorInfo() {
-		if(analysist_paths == null || path_editors == null) {
+		if (analysist_paths == null || path_editors == null) {
 			analysist_paths = new TreeMap<String, Set<String>>();
 			path_editors = new TreeMap<String, Set<String>>();
 			try {
-				BufferedReader reader = new BufferedReader(new FileReader(props.getProperty("mysql.data.DataSource.commentdb") + ".csv"));
+				BufferedReader reader = new BufferedReader(new FileReader(
+						props.getProperty("mysql.data.DataSource.commentdb")
+								+ ".csv"));
 				String line = "";
-				while((line = reader.readLine()) != null) {
+				while ((line = reader.readLine()) != null) {
 					String[] sp = line.split(",");
 					String path = sp[0];
 					String user = sp[2];
-					if(analysist_paths.containsKey(user)) {
+					if (analysist_paths.containsKey(user)) {
 						analysist_paths.get(user).add(path);
 					} else {
 						Set<String> set = new HashSet<String>();
 						set.add(path);
 						analysist_paths.put(user, set);
 					}
-					
-					if(path_editors.containsKey(path)) {
+
+					if (path_editors.containsKey(path)) {
 						path_editors.get(path).add(user);
 					} else {
 						Set<String> set = new HashSet<String>();
@@ -803,23 +848,25 @@ public class CommentAnalyzer {
 				}
 				reader.close();
 			} catch (FileNotFoundException e) {
-				logger.error(props.getProperty("mysql.data.DataSource.commentdb") + ".csv doesn't exists");
+				logger.error(props
+						.getProperty("mysql.data.DataSource.commentdb")
+						+ ".csv doesn't exists");
 				e.printStackTrace();
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}
 	}
-	
+
 	public Map<String, Set<String>> getAnalysistPaths() {
-		if(analysist_paths == null) {
+		if (analysist_paths == null) {
 			loadCommentEditorInfo();
 		}
 		return analysist_paths;
 	}
-	
+
 	public Map<String, Set<String>> getPathEditors() {
-		if(path_editors == null) {
+		if (path_editors == null) {
 			loadCommentEditorInfo();
 		}
 		return path_editors;
@@ -973,7 +1020,7 @@ public class CommentAnalyzer {
 		stmt.close();
 		return c;
 	}
-	
+
 	/**
 	 * 输入一个注释路径，查找出当前分类lxrType下所有该文件的注释, 除掉当前注释
 	 * 
@@ -982,41 +1029,46 @@ public class CommentAnalyzer {
 	 * @param lxrType
 	 *            要查询的lxr类型
 	 * @return 注释列表，每一条是一条注释，key是path，value是注释内容
-	 * @throws IOException 
-	 * @throws SQLException 
+	 * @throws IOException
+	 * @throws SQLException
 	 */
-	public Map<String,String> getFileCommentsWithPath(String input_path, String lxrType)
-			throws IOException, SQLException {
+	public Map<String, String> getFileCommentsWithPath(String input_path,
+			String lxrType) throws IOException, SQLException {
 		String filename = getCommentFileName(input_path);
 		Map<String, String> c = new TreeMap<String, String>();
 		allComments = getAllComments();
 		comment_types = loadCommentsTypes();
-		for(Map.Entry<String, String> entry: allComments.entrySet()) {
+		for (Map.Entry<String, String> entry : allComments.entrySet()) {
 			String path = entry.getKey();
-			if(!path.equals(input_path) && path.startsWith(filename) && (comment_types.get(path).equals(lxrType) || lxrType.equals("ALL"))) {
+			if (!path.equals(input_path)
+					&& path.startsWith(filename)
+					&& (comment_types.get(path).equals(lxrType) || lxrType
+							.equals("ALL"))) {
 				c.put(path, entry.getValue());
 			}
 		}
 		return c;
 	}
-	
-	
+
 	/**
-	 * 输入一个linux源代码的文件名，查找出当前分类lxrType下所有该文件的注释(不同与getFileComments(String filename, String lxrType)的是，本方法是从文件加载的)
+	 * 输入一个linux源代码的文件名，查找出当前分类lxrType下所有该文件的注释(不同与getFileComments(String
+	 * filename, String lxrType)的是，本方法是从文件加载的)
 	 * 
 	 * @param filename
 	 *            传入的linux源代码的文件名
 	 * @param lxrType
 	 *            要查询的lxr类型
 	 * @return 注释列表，每一条是一条注释
-	 * @throws IOException 
-	 * @throws SQLException 
+	 * @throws IOException
+	 * @throws SQLException
 	 */
-	public List<String> loadFileComments(String filename, String lxrType) throws SQLException, IOException {
+	public List<String> loadFileComments(String filename, String lxrType)
+			throws SQLException, IOException {
 		List<String> c = new ArrayList<String>();
 		allComments = getAllComments(true);
-		for(Map.Entry<String, String> entry: allComments.entrySet()) {
-			if(getCommentFileName(entry.getKey()).equals(filename) && getType(entry.getKey(), true).equals(lxrType)) {
+		for (Map.Entry<String, String> entry : allComments.entrySet()) {
+			if (getCommentFileName(entry.getKey()).equals(filename)
+					&& getType(entry.getKey(), true).equals(lxrType)) {
 				c.add(entry.getValue());
 			}
 		}
@@ -1070,21 +1122,21 @@ public class CommentAnalyzer {
 		return lxrtypes;
 	}
 
-	public List<String> getAllCommentedFilepath(){
+	public List<String> getAllCommentedFilepath() {
 		List<String> filePaths = new ArrayList<String>();
 		filePaths.addAll(getCommentedFileSet("/"));
 		return filePaths;
 	}
-	
-	public Set<String> getCommentedFileSet(String prefix){
+
+	public Set<String> getCommentedFileSet(String prefix) {
 		Set<String> file_set = new TreeSet<String>();
-	
-		for(String path: getAllComments().keySet()) {
-			if(path.startsWith(prefix)){
+
+		for (String path : getAllComments().keySet()) {
+			if (path.startsWith(prefix)) {
 				file_set.add(getCommentFileName(path));
 			}
 		}
-		
+
 		return file_set;
 	}
 
@@ -1203,7 +1255,7 @@ public class CommentAnalyzer {
 		stmt.close();
 		return tti;
 	}
-	
+
 	public String getColoredInfo(String path, int template_type) {
 		StringBuilder template_format = new StringBuilder();
 		allComments = getAllComments();
@@ -1211,69 +1263,85 @@ public class CommentAnalyzer {
 		try {
 			WordSeg wordSeg = new WordSeg();
 			boolean reserveLineBreak = true;
-			List<String> current_comment_seg = wordSeg.segmentation(comment, WordSeg.NO_POS_TAG, WordSeg.SEG_FILTER_WITHPUNC, reserveLineBreak);
+			List<String> current_comment_seg = wordSeg.segmentation(comment,
+					WordSeg.NO_POS_TAG, WordSeg.SEG_FILTER_WITHPUNC,
+					reserveLineBreak);
 			List<String> longest_template = loadNewTemplate(path, template_type);
-			
-			logger.info("#current_comment_seg#:\t" + current_comment_seg.toString());
+
+			logger.info("#current_comment_seg#:\t"
+					+ current_comment_seg.toString());
 			logger.info("#longest_template#:\t" + longest_template.toString());
-			
+
 			int nextIndex = 0;
 			int nextIndexInTemplate = 0;
-			
-			while(nextIndex < current_comment_seg.size() && nextIndexInTemplate < longest_template.size()) {
-				//因为提取模板时，先过滤了标点，所以会将注释中连续的变量名放入模板中，匹配时，现在去掉
-				if(longest_template.get(nextIndexInTemplate).replaceAll("[^\u4e00-\u9fa5]", "").equals("")){
+
+			while (nextIndex < current_comment_seg.size()
+					&& nextIndexInTemplate < longest_template.size()) {
+				// 因为提取模板时，先过滤了标点，所以会将注释中连续的变量名放入模板中，匹配时，现在去掉
+				if (longest_template.get(nextIndexInTemplate)
+						.replaceAll("[^\u4e00-\u9fa5]", "").equals("")) {
 					++nextIndexInTemplate;
 					continue;
 				}
-				if(!WordSeg.SEG_FILTER.getText(current_comment_seg.get(nextIndex)).equals(longest_template.get(nextIndexInTemplate))){
+				if (!WordSeg.SEG_FILTER.getText(
+						current_comment_seg.get(nextIndex)).equals(
+						longest_template.get(nextIndexInTemplate))) {
 					template_format.append(current_comment_seg.get(nextIndex));
-					logger.info("#APPEND#:\t" + current_comment_seg.get(nextIndex));
+					logger.info("#APPEND#:\t"
+							+ current_comment_seg.get(nextIndex));
 					++nextIndex;
 				} else {
-					template_format.append(getColorString(current_comment_seg.get(nextIndex), "red"));
-					logger.info("#APPEND_MATCH#:\t" + getColorString(current_comment_seg.get(nextIndex), "red"));
+					template_format.append(getColorString(
+							current_comment_seg.get(nextIndex), "red"));
+					logger.info("#APPEND_MATCH#:\t"
+							+ getColorString(
+									current_comment_seg.get(nextIndex), "red"));
 					++nextIndex;
 					++nextIndexInTemplate;
 				}
 			}
-			
-			while(nextIndex < current_comment_seg.size()) {
+
+			while (nextIndex < current_comment_seg.size()) {
 				template_format.append(current_comment_seg.get(nextIndex));
 				logger.info("#APPEND#:\t" + current_comment_seg.get(nextIndex));
 				++nextIndex;
 			}
-			
+
 			wordSeg.exit();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 		return template_format.toString();
 	}
-	
+
 	public String getColorString(String input, String color) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("<b><font color = '" + color + "'>").append(input).append("</font></b>");
+		sb.append("<b><font color = '" + color + "'>").append(input)
+				.append("</font></b>");
 		return sb.toString();
 	}
-	
+
 	public List<String> loadNewTemplate(String path, int template_type) {
 		List<String> template = new ArrayList<String>();
 		try {
 			Statement stmt = this.storage_conn.createStatement();
 			ResultSet rs = null;
-			if(template_type == TEMPLATE_SAME_TYPE) {
-				 rs = stmt.executeQuery("select new_template from new_template where path_file = \"" + path + "\"");	
-			} else if (template_type == TEMPLATE_SAME_EDITOR){
-				 rs = stmt.executeQuery("select same_editor_template from new_template where path_file = \"" + path + "\"");
+			if (template_type == TEMPLATE_SAME_TYPE) {
+				rs = stmt
+						.executeQuery("select new_template from new_template where path_file = \""
+								+ path + "\"");
+			} else if (template_type == TEMPLATE_SAME_EDITOR) {
+				rs = stmt
+						.executeQuery("select same_editor_template from new_template where path_file = \""
+								+ path + "\"");
 			}
-			
-			if(!rs.next()){
+
+			if (!rs.next() || rs.getString(1) == null) {
 				return template;
 			}
 			String[] result = rs.getString(1).split(";");
-			for(String s: result) {
-				if(s != null && !s.equals("")){
+			for (String s : result) {
+				if (s != null && !s.equals("")) {
 					template.add(s);
 				}
 			}
@@ -1284,7 +1352,7 @@ public class CommentAnalyzer {
 			e.printStackTrace();
 		}
 		return template;
-		
+
 	}
 
 	public String getChineseComment(String commentContent) {
