@@ -71,7 +71,7 @@ public class EditBehaviorAnalyzer {
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
 		}
-		logger.info("done");
+		logger.info("EditBehaviorAnalyzer done");
 	}
 	
 	public void loadCommentBehaviorTimeline() throws SQLException, FileNotFoundException {

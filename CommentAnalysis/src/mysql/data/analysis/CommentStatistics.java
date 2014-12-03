@@ -23,7 +23,7 @@ public class CommentStatistics {
 //	public static void main(String[] args) throws IOException {
 //		log.setLevel(Level.INFO);
 //		for(String lxrtype : LxrType.getTypeList()){
-//			log.info("Lxy_type:"+lxrtype);
+//			log.info("Lxr_type:"+lxrtype);
 //			
 //			TXTCommentAnalyzer a = new TXTCommentAnalyzer(lxrtype,false);
 //			Map<String,String> comments = a.getComments();

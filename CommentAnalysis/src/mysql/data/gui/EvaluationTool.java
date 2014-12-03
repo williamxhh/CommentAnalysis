@@ -21,6 +21,7 @@ import java.net.URL;
 import java.sql.SQLException;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -55,7 +56,11 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreeNode;
 
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
+
 import mysql.data.analysis.CommentAnalyzer;
+import mysql.data.analysis.quality.CommentsQualityAnalysis;
 import mysql.data.analysisDB.entity.JudgeTableInfo;
 import mysql.data.filter.CategoryTagFilter;
 import mysql.data.filter.DoNothingFilter;
@@ -67,7 +72,7 @@ import mysql.data.util.PropertiesUtil;
 
 //VS4E -- DO NOT REMOVE THIS LINE!
 public class EvaluationTool extends JFrame {
-
+	private static Logger logger = Logger.getLogger(EvaluationTool.class);
 	private static final long serialVersionUID = 1L;
 
 	Map<String, String> allComments = null;
@@ -80,6 +85,7 @@ public class EvaluationTool extends JFrame {
 	FilterBase filter = null;
 	EvaluationPreparation ep = null;
 	CommentAnalyzer ca = null;
+	CommentsQualityAnalysis cqa = null;
 	
 	//记录report面板中上面的统计信息
 	private String stat_info;
@@ -113,8 +119,11 @@ public class EvaluationTool extends JFrame {
 	private JLabel judged_comment_label;
 	private JLabel jLabel8;
 	ButtonGroup judge_type_bg = new ButtonGroup();
-	private JRadioButton judge_type_unjudge_ratio_btn;
-	private JRadioButton judge_type_judged_ratio_btn;
+	private JRadioButton judge_type_unjudge_radio_btn;
+	private JRadioButton judge_type_judged_radio_btn;
+	ButtonGroup template_type_bg = new ButtonGroup();
+	private JRadioButton template_type_same_type_radio_btn;
+	private JRadioButton template_type_same_editor_radio_btn;
 	private JPanel judgePanel;
 	private JLabel source_code_url_label;
 	private JPanel reportPanel;
@@ -187,6 +196,7 @@ public class EvaluationTool extends JFrame {
 	private JComboBox<String> jTree_comment_type_comboBox;
 
 	public EvaluationTool() {
+		logger.setLevel(Level.WARN);
 		loadComments();
 		initComponents();
 	}
@@ -196,6 +206,7 @@ public class EvaluationTool extends JFrame {
 			boolean loadFromFile = true;
 			if (allComments == null) {
 				ca = new CommentAnalyzer(loadFromFile);
+				cqa = new CommentsQualityAnalysis(loadFromFile);
 				allComments = ca.getAllComments(loadFromFile);
 			}
 			filteredComments = new HashMap<String, String>();
@@ -688,10 +699,10 @@ public class EvaluationTool extends JFrame {
 
 
 	private JRadioButton getJudgedRadioButton() {
-		if (judge_type_judged_ratio_btn == null) {
-			judge_type_judged_ratio_btn = new JRadioButton();
-			judge_type_judged_ratio_btn.setText("已评阅");
-			judge_type_judged_ratio_btn.addActionListener(new ActionListener() {
+		if (judge_type_judged_radio_btn == null) {
+			judge_type_judged_radio_btn = new JRadioButton();
+			judge_type_judged_radio_btn.setText("已评阅");
+			judge_type_judged_radio_btn.addActionListener(new ActionListener() {
 
 				@Override
 				public void actionPerformed(ActionEvent e) {
@@ -699,15 +710,15 @@ public class EvaluationTool extends JFrame {
 				}
 			});
 		}
-		return judge_type_judged_ratio_btn;
+		return judge_type_judged_radio_btn;
 	}
 
 	private JRadioButton getUnjudgeRadioButton() {
-		if (judge_type_unjudge_ratio_btn == null) {
-			judge_type_unjudge_ratio_btn = new JRadioButton();
-			judge_type_unjudge_ratio_btn.setText("未评阅");
-			judge_type_unjudge_ratio_btn.setSelected(true);
-			judge_type_unjudge_ratio_btn
+		if (judge_type_unjudge_radio_btn == null) {
+			judge_type_unjudge_radio_btn = new JRadioButton();
+			judge_type_unjudge_radio_btn.setText("未评阅");
+			judge_type_unjudge_radio_btn.setSelected(true);
+			judge_type_unjudge_radio_btn
 					.addActionListener(new ActionListener() {
 
 						@Override
@@ -716,7 +727,37 @@ public class EvaluationTool extends JFrame {
 						}
 					});
 		}
-		return judge_type_unjudge_ratio_btn;
+		return judge_type_unjudge_radio_btn;
+	}
+	
+	private JRadioButton getSameEditorTemplateRadioButton() {
+		if(template_type_same_editor_radio_btn == null) {
+			template_type_same_editor_radio_btn = new JRadioButton();
+			template_type_same_editor_radio_btn.setText("同作者");
+			template_type_same_editor_radio_btn.addActionListener(new ActionListener() {
+				
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					jRadioButtonActionActionPerformed(e);
+				}
+			});
+		}
+		return template_type_same_editor_radio_btn;
+	}
+	
+	private JRadioButton getSameTypeTemplateRadioButton() {
+		if(template_type_same_type_radio_btn == null) {
+			template_type_same_type_radio_btn = new JRadioButton();
+			template_type_same_type_radio_btn.setText("同类型");
+			template_type_same_type_radio_btn.setSelected(true);
+			template_type_same_type_radio_btn.addActionListener(new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					jRadioButtonActionActionPerformed(e);
+				}
+			});
+		}
+		return template_type_same_type_radio_btn;
 	}
 
 	private JLabel getJLabel8() {
@@ -1082,6 +1123,19 @@ public class EvaluationTool extends JFrame {
 			reportPanel = new JPanel();
 			reportPanel.setLayout(new BorderLayout());
 			
+			JPanel left_panel = new JPanel();
+			left_panel.setLayout(new BorderLayout());
+			left_panel.add(getJTreeScrollPane(), BorderLayout.CENTER);
+			
+			JPanel template_type_panel = new JPanel();
+			template_type_panel.setLayout(new GridLayout(1,2));
+			template_type_panel.add(getSameEditorTemplateRadioButton());
+			template_type_panel.add(getSameTypeTemplateRadioButton());
+			template_type_bg.add(getSameEditorTemplateRadioButton());
+			template_type_bg.add(getSameTypeTemplateRadioButton());
+			
+			left_panel.add(template_type_panel, BorderLayout.SOUTH);
+			
 			JPanel comments_info_panel = new JPanel();
 			comments_info_panel.setLayout(new BorderLayout());
 			comments_info_panel.add(getJTreeCommentTypeComboBox(),BorderLayout.NORTH);
@@ -1090,11 +1144,11 @@ public class EvaluationTool extends JFrame {
 			JSplitPane ver_split_pane = new JSplitPane(JSplitPane.VERTICAL_SPLIT,getJTreeStatInfoScrollPane(),comments_info_panel);
 			ver_split_pane.setDividerSize(3);
 			ver_split_pane.setOneTouchExpandable(true);
-			ver_split_pane.setDividerLocation(100);
-			JSplitPane hor_split_pane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,getJTreeScrollPane(),ver_split_pane);
+			ver_split_pane.setDividerLocation(150);
+			JSplitPane hor_split_pane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT,left_panel,ver_split_pane);
 			hor_split_pane.setDividerSize(3);
 			hor_split_pane.setOneTouchExpandable(true);
-			hor_split_pane.setDividerLocation(150);
+			hor_split_pane.setDividerLocation(200);
 			
 			reportPanel.add(hor_split_pane);
 		}
@@ -1228,7 +1282,7 @@ public class EvaluationTool extends JFrame {
 	private void jRadioButtonActionActionPerformed(ActionEvent event) {
 		Object source = event.getSource();
 
-		if (source == judge_type_judged_ratio_btn) {
+		if (source == judge_type_judged_radio_btn) {
 			String type = judge_comment_type_combo_box.getSelectedItem()
 					.toString();
 			if (type == null) {
@@ -1236,7 +1290,7 @@ public class EvaluationTool extends JFrame {
 			} else {
 				updateCommentPathList(1, type);
 			}
-		} else if (source == judge_type_unjudge_ratio_btn) {
+		} else if (source == judge_type_unjudge_radio_btn) {
 			String type = judge_comment_type_combo_box.getSelectedItem()
 					.toString();
 			if (type == null) {
@@ -1250,6 +1304,8 @@ public class EvaluationTool extends JFrame {
 			// setTitle(((JRadioButton)source).getText());
 		} else if (source == validation_invalid_radio_btn) {
 			// setTitle(((JRadioButton)source).getText());
+		} else if (source == template_type_same_editor_radio_btn || source == template_type_same_type_radio_btn) {
+			updateTreeCommentInfo();
 		}
 	}
 
@@ -1268,7 +1324,7 @@ public class EvaluationTool extends JFrame {
 			DefaultListModel<String> listModel = new DefaultListModel<String>();
 			TreeSet<JudgeTableInfo> list = new TreeSet<JudgeTableInfo>();
 			for (JudgeTableInfo jti : judgeList.values()) {
-				list.add(jti);
+					list.add(jti);
 			}
 			for (JudgeTableInfo jti : list) {
 				if (state == 0) {
@@ -1320,7 +1376,7 @@ public class EvaluationTool extends JFrame {
 			// 更新注释框所显示的注释内容
 			if (selected_path != null) {
 				selected_comment_jeditor_pane
-						.setText(getColoredInfo(selected_path));
+						.setText(getColoredInfo(selected_path, CommentAnalyzer.TEMPLATE_SAME_TYPE));
 			}
 
 			// 更新源码路径的url信息
@@ -1384,7 +1440,7 @@ public class EvaluationTool extends JFrame {
 		@SuppressWarnings("unchecked")
 		String selected_type = ((JComboBox<String>) event.getSource())
 				.getSelectedItem().toString();
-		boolean unjudged = judge_type_unjudge_ratio_btn.isSelected();
+		boolean unjudged = judge_type_unjudge_radio_btn.isSelected();
 		if (unjudged) {
 			updateCommentPathList(0, selected_type);
 		} else {
@@ -1406,6 +1462,8 @@ public class EvaluationTool extends JFrame {
 				}
 			}
 			comments_info_jEditorPane.setText(content.toString());
+			logger.info("jTree_comment_type_comboBox_ItemStateChanged\r\n" + content.toString());
+			
 			
 			if(!selected_type.equals("ALL")) {
 				String[] split = stat_info.split("\n");
@@ -1455,8 +1513,8 @@ public class EvaluationTool extends JFrame {
 		}
 	}
 
-	public String getColoredInfo(String path) {
-		return ca.getColoredInfo(path);
+	public String getColoredInfo(String path, int template_type) {
+		return ca.getColoredInfo(path, template_type);
 	}
 
 	private void buildPathTree() {
@@ -1490,7 +1548,7 @@ public class EvaluationTool extends JFrame {
 
 	}
 
-	private void jTreeValueChanged(TreeSelectionEvent e) {
+	private void updateTreeCommentInfo() {
 		stat_info_jTextArea.setText("处理中");
 		comments_info_jEditorPane.setText("处理中");
 		if(tree_comment_info == null) {
@@ -1502,12 +1560,23 @@ public class EvaluationTool extends JFrame {
 		backTask = new Thread(new BackgroundUpdateTask());
 		backTask.start();
 	}
+	
+	private void jTreeValueChanged(TreeSelectionEvent e) {
+		updateTreeCommentInfo();
+	}
 
 	class BackgroundUpdateTask implements Runnable {
+		
+		private StringBuilder info;
+		private StringBuilder comments;
 
 		@Override
 		public void run() {
 			jTree_comment_type_comboBox.removeAllItems();
+			info = new StringBuilder();
+			comments = new StringBuilder();
+			
+			//每次各一个唯一的更新编号，如果当前这个处理还没有处理完，又点了其他路径，update_counter会变大，这样的话当前这次计算的结果就不会覆盖后点击的路径结果。
 			int mycouter = ++update_counter;
 			DefaultMutableTreeNode selectedNode = (DefaultMutableTreeNode) jTree0
 					.getLastSelectedPathComponent();
@@ -1519,20 +1588,31 @@ public class EvaluationTool extends JFrame {
 				}
 				String selectedPath = sb.toString();
 				
-				StringBuilder info = new StringBuilder();
-				StringBuilder comments = new StringBuilder();
-				Map<String, Integer> typeCounter = new HashMap<String, Integer>();
+				Map<String, String> typeCounter = null;
+				try {
+					typeCounter = cqa.statCommentedRatio(selectedPath);
+				} catch (ClassNotFoundException | SQLException | IOException e) {
+					e.printStackTrace();
+				}
+				Map<String, Map<String,Integer>> template_word_stat = new HashMap<String, Map<String, Integer>>();
 				Set<String> templates = new TreeSet<String>();
 				
+				
+				//选择抽取模板的模式
+				int template_type = CommentAnalyzer.TEMPLATE_SAME_TYPE;
+				
+				if(template_type_same_editor_radio_btn.isSelected()) {
+					template_type = CommentAnalyzer.TEMPLATE_SAME_EDITOR;
+				} else if(template_type_same_type_radio_btn.isSelected()) {
+					template_type = CommentAnalyzer.TEMPLATE_SAME_TYPE;
+				}
+				
+				//为了避免多线程时的界面更新异常，先定义一个临时变量temp_tree_comment_info保存当前选中路径的注释着色信息，等确定是本线程更新以后，在更新EvaluationTool里面的tree_comment_info变量
+				Map<String, String> temp_tree_comment_info = new HashMap<String, String>();
 				for(Map.Entry<String, String> entry: allComments.entrySet()) {
 					String path = entry.getKey();
 					if(path.startsWith(selectedPath)) {
 						String type = comment_types.get(path);
-						if(typeCounter.containsKey(type)){
-							typeCounter.put(type, typeCounter.get(type) + 1);
-						} else {
-							typeCounter.put(type, 1);
-						}
 						
 						String filename = "";
 						if(!type.equals("file")) {
@@ -1552,16 +1632,46 @@ public class EvaluationTool extends JFrame {
 							url.append("#" + getLineNo(path));
 						}
 						
-						String title = "<a href = '" + url.toString() + "'>" + path + "</a><br/>";
+						String title = "<a href = '" + url.toString() + "'>" + path + "</a>   " + ca.getPathEditors().get(path).toString() + "<br/>";
 						comments.append(title);
 						
-						templates.add(type + ":" + ca.loadNewTemplate(path).toString());
-						String color_info = getColoredInfo(path);
+						List<String> t = ca.loadNewTemplate(path, template_type);
+						
+						if(!type.equals("file")){
+							templates.add(type + ":" + t.toString());
+							
+							Map<String, Integer> wordCounter = null;
+							if(template_word_stat.containsKey(type)) {
+								wordCounter = template_word_stat.get(type);
+							} else {
+								wordCounter = new HashMap<String, Integer>();
+							}
+							
+							for(String s: t) {
+								if(wordCounter.containsKey(s)) {
+									wordCounter.put(s, wordCounter.get(s) + 1);
+								} else {
+									wordCounter.put(s, 1);
+								}
+							}
+							
+							template_word_stat.put(type, wordCounter);
+						}
+						
+						String color_info = getColoredInfo(path, template_type);
 						comments.append(color_info);
 						comments.append("<br/><br/>");
 						
-						tree_comment_info.put(path, title + color_info);
+						temp_tree_comment_info.put(path, title + color_info);
 					}
+				}
+				
+				for(Map.Entry<String, String> entry: typeCounter.entrySet()) {
+					info.append(entry.getKey() + ":" + entry.getValue() + "\r\n");
+				}
+				
+				for(String t: template_word_stat.keySet()) {
+					info.append(t + ": " + template_word_stat.get(t).toString() + "\r\n");
 				}
 				
 				for(String t : templates) {
@@ -1569,14 +1679,13 @@ public class EvaluationTool extends JFrame {
 						info.append(t + "\r\n");
 				}
 				
-//				for(Map.Entry<String, Integer> entry: typeCounter.entrySet()) {
-//					info.append(entry.getKey() + ":" + entry.getValue() + "\r\n");
-//				}
 				
 				if(mycouter == update_counter){
+					tree_comment_info = temp_tree_comment_info;
 					stat_info = info.toString();
 					stat_info_jTextArea.setText(stat_info);
 					comments_info_jEditorPane.setText(comments.toString());
+					logger.info("thread update\r\n" + comments.toString());
 					jTree_comment_type_comboBox.addItem("ALL");
 					for(String t: typeCounter.keySet()) {
 						jTree_comment_type_comboBox.addItem(t);

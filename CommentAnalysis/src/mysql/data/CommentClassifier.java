@@ -239,11 +239,11 @@ public class CommentClassifier {
 
 			if (!comm_symname.equals("") && comm_linenoInFile != -1) {
 				type = getType(comm_filename, comm_symname, comm_linenoInFile);
-			}else{
+			} else {
 				type = "file";
 			}
 
-		}else{
+		} else {
 			type = "exception_android";
 		}
 		return type;

@@ -1,11 +1,13 @@
 package mysql.data.analysis.quality;
 
-import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileNotFoundException;
-import java.io.FileReader;
+import java.io.FileOutputStream;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
 import java.io.PrintWriter;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
@@ -13,35 +15,49 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
+import tool.nlpir.WordSeg;
+
 import java.sql.Connection;
 
+import mysql.data.analysis.CommentAnalyzer;
 import mysql.data.analysis.TXTCommentAnalyzer;
 import mysql.data.analysisDB.entity.FileCommentTypeCount;
 import mysql.data.filter.DoNothingFilter;
 import mysql.data.filter.FilterBase;
 import mysql.data.filter.IscasChineseCommentExtractor;
 import mysql.data.filter.IscasLinkFilter;
+import mysql.data.util.CommentEntryCount;
 import mysql.data.util.FileUtil;
+import mysql.data.util.NLPAnalysisResult;
 import mysql.data.util.PropertiesUtil;
 
 public class CommentsQualityAnalysis {
 	private static final Logger log = Logger.getLogger(CommentsQualityAnalysis.class);
 	private static Properties props = PropertiesUtil.getProperties();
+	private static String NONE_OF_THIS_TYPE = "None of This Type";
 	
-	public static void main(String[] args)  throws IOException, SQLException{
-		log.setLevel(Level.DEBUG);
-		CommentsQualityAnalysis cqa = new CommentsQualityAnalysis();
-		String type = "function definition";
+	private CommentAnalyzer ca = null;
+	private Map<String, CommentEntryCount> entry_map = null;
+	private Map<String, NLPAnalysisResult> nlp_result_map = null;
+	
+	public static void main(String[] args)  throws IOException, SQLException, ClassNotFoundException{
+		log.setLevel(Level.WARN);
+		CommentsQualityAnalysis cqa = new CommentsQualityAnalysis(true);
+
 		
-		cqa.FilterLinkAndImagemap(type);
+//		cqa.FilterLinkAndImagemap(type);
 		
 //		log.info("##validity##");
 //		cqa.validityRedundantComment(type);
@@ -51,11 +67,250 @@ public class CommentsQualityAnalysis {
 //		log.info("##usefulness##");
 //		cqa.usefulnessLeakRelatedCommentsCount(type);
 		
-		log.info("##completeness##");
+//		log.info("##completeness##");
 //		cqa.completenessCommentedTypeRatio();
-		cqa.completenessFileCommentedRatio(type);
+//		cqa.completenessFileCommentedRatio(type);
+		
+		log.info("##stat##");
+		String path = "/";
+		String type = "function definition";
+//		cqa.statCommentTypeDistribution(path);
+//		cqa.statCommentedRatio(path);
+//		cqa.statNLPAnalysis(path,type);
+//		log.info(cqa.getAllEntries().get("/virt/kvm/kvm_main.c"));
+		cqa.outputNLPResultToFile(type);
+		
 		log.info("done");
 //		cqa.completeness(type);
+	}
+	
+	public CommentsQualityAnalysis(boolean loadFromFile) {
+		ca = new CommentAnalyzer(loadFromFile);
+	}
+	
+	/**
+	 * 获得不同lxr类型注释的分布情况，key是lxr类型，value是注释数量
+	 * @param prefix   注释路径前缀
+	 * @return
+	 */
+	public Map<String,Integer> statCommentTypeDistribution(String prefix) {
+		Map<String,String> comment_types = ca.loadCommentsTypes();
+		Map<String, Integer> type_counter = new TreeMap<String, Integer>();
+		int total_count = 0;
+		for(Map.Entry<String, String> entry : comment_types.entrySet()) {
+			if(entry.getKey().startsWith(prefix)){
+				String type = entry.getValue();
+				if(type_counter.containsKey(type)) {
+					type_counter.put(type, type_counter.get(type) + 1);
+				} else {
+					type_counter.put(type, 1);
+				}
+				++total_count;
+			}
+		}
+		
+		for(Map.Entry<String, Integer> entry: type_counter.entrySet()) {
+			log.info(entry.getKey() + "," + entry.getValue());
+		}
+		log.info("total comments count : " + total_count);
+		return type_counter;
+	}
+	
+	/**
+	 * 获取不同lxr类型的注释的已注释数量和注释入口总数，得到注释覆盖度
+	 * @param prefix  注释路径前缀
+	 * @return
+	 * @throws SQLException
+	 * @throws IOException
+	 * @throws ClassNotFoundException
+	 */
+	public Map<String, String> statCommentedRatio(String prefix) throws SQLException, IOException, ClassNotFoundException {
+		Map<String, Integer> commented_count = new TreeMap<String, Integer>();
+		Map<String, Integer> total_count = new TreeMap<String, Integer>();
+		Set<String> file_set = new TreeSet<String>();
+		Map<String, String> comment_types = ca.loadCommentsTypes();
+		
+		Map<String, String> all_comments = ca.getAllComments();
+		for(Map.Entry<String, String> entry : all_comments.entrySet()) {
+			String path = entry.getKey();
+			if(path.startsWith(prefix)){
+				file_set.add(ca.getCommentFileName(path));
+				String type = comment_types.get(path);
+				if(commented_count.containsKey(type)) {
+					commented_count.put(type, commented_count.get(type) + 1);
+				} else {
+					commented_count.put(type, 1);
+				}
+			}
+		}
+			
+		log.info("total file: " + file_set.size());
+		for(String filename : file_set) {
+			log.info(filename);
+		}
+		
+		for(String file : file_set) {
+			Map<String, Integer> file_count = getAllEntries(file);
+			for(String type: file_count.keySet()) {
+				if(total_count.containsKey(type)) {
+					total_count.put(type, total_count.get(type) + file_count.get(type));
+				} else {
+					total_count.put(type, file_count.get(type));
+				}
+			}
+		}
+		
+		Map<String, String> result = new TreeMap<String, String>();
+		for(String type: total_count.keySet()) {
+			if(commented_count.containsKey(type)) {
+				result.put(type, commented_count.get(type) + "/" + total_count.get(type));
+			} else {
+				result.put(type, "0/" + total_count.get(type));
+			}
+		}
+		
+		for(Map.Entry<String, String> entry: result.entrySet()) {
+			log.info(entry.getKey() + ":\t" + entry.getValue());
+		}
+		return result;
+	}
+	
+	private void outputNLPResultToFile(String lxr_type) {
+		log.setLevel(Level.INFO);
+		try {
+			PrintWriter writer = new PrintWriter(props.getProperty("mysql.data.DataSource.rootPath") + "/" + lxr_type + "_" +props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.lxrNLP"));
+		
+			for (String file_name : ca.getAllCommentedFilepath()) {
+				log.info(file_name);
+				String info = statNLPAnalysis(file_name, lxr_type);
+				if(!info.equals(NONE_OF_THIS_TYPE)) {
+					writer.write(file_name + "," + info + "\r\n");
+				}
+			}
+			
+			writer.flush();
+			writer.close();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
+		}
+	}
+	
+	
+	/**
+	 * 统计指定路径下，指定lxr类型注释的平均文本长度，平均词组长度，平均名词比率，动词比率，其他词比率等
+	 * @param prefix
+	 * @param lxr_type
+	 */
+	public String statNLPAnalysis(String prefix, String lxr_type) {
+		Set<NLPAnalysisResult> result_set = nlpAnalysis(prefix, lxr_type);
+		
+		double sum_content_len = 0;
+		double sum_word_count = 0;
+		double sum_noun_count = 0;
+		double sum_verb_count = 0;
+		double sum_other_count = 0;
+		
+		for(NLPAnalysisResult r : result_set) {
+			sum_content_len += r.getContent_len();
+			sum_word_count += r.getWord_list().size();
+			sum_noun_count += r.getNoun_list().size();
+			sum_verb_count += r.getVerb_list().size();
+			sum_other_count += r.getOther_list().size();
+		}
+		
+		if(result_set.size() == 0 || sum_word_count == 0) {
+			return NONE_OF_THIS_TYPE;
+		}
+		
+		StringBuilder sb = new StringBuilder();
+		
+		sb.append(sum_content_len/result_set.size()).append(",")
+		  .append(sum_word_count/result_set.size()).append(",")
+		  .append(sum_noun_count/sum_word_count).append(",")
+		  .append(sum_verb_count/sum_word_count).append(",")
+		  .append(sum_other_count/sum_word_count).append(",")
+		  .append(result_set.size());
+		
+		log.info("Content length , Word count , Noun ratio , Verb ratio , Other ratio , Number of Comments ");
+		log.info(sb.toString());
+		
+		return sb.toString();
+	}
+	
+	public Set<NLPAnalysisResult> nlpAnalysis(String prefix) {
+		return nlpAnalysis(prefix, "ALL");
+	}
+	
+	/**
+	 * 获取指定路径，指定lxr类型的全部注释的nlp分析结果
+	 * @param prefix
+	 * @param lxr_type
+	 * @return
+	 */
+	public Set<NLPAnalysisResult> nlpAnalysis(String prefix, String lxr_type) {
+		Set<NLPAnalysisResult> result_set = new HashSet<NLPAnalysisResult>();
+		
+		if(nlp_result_map == null) {
+			File nlp_file = new File(props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.nlpResult"));
+			if(nlp_file.exists()) {
+				log.debug("load from file");
+				try {
+					ObjectInputStream ois = new ObjectInputStream(new FileInputStream(nlp_file));
+					nlp_result_map = (Map<String, NLPAnalysisResult>)ois.readObject();
+					ois.close();
+				} catch (IOException | ClassNotFoundException e) {
+					e.printStackTrace();
+				}
+				
+			} else {
+				log.debug("compute");
+				nlp_result_map = new TreeMap<String, NLPAnalysisResult>();
+				WordSeg wordSeg = new WordSeg();
+				for (Map.Entry<String, String> entry : ca.getAllComments().entrySet()) {
+					String path = entry.getKey();
+					String content = entry.getValue();
+					log.info(content);
+					NLPAnalysisResult result = new NLPAnalysisResult(path);
+					result.setContent_len(content.length());
+					result.setWord_list(wordSeg.segmentation(content,
+							WordSeg.POS_TAG, WordSeg.SEG_FILTER_WITHPUNC));
+					for (String w : result.getWord_list()) {
+						int index = w.lastIndexOf('/');
+						if (w.charAt(index + 1) == 'n') {
+							result.getNoun_list().add(w.substring(0, index));
+						} else if (w.charAt(index + 1) == 'v') {
+							result.getVerb_list().add(w.substring(0, index));
+						} else if (w.charAt(index + 1) != 'w') {
+							result.getOther_list().add(w.substring(0, index));
+						}
+					}
+					log.info(result.getNoun_list().toString());
+					log.info(result.getVerb_list().toString());
+					log.info(result.getOther_list().toString());
+
+					nlp_result_map.put(path, result);
+				}
+				
+				try {
+					ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(nlp_file));
+					oos.writeObject(nlp_result_map);
+					oos.flush();
+					oos.close();
+					
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		}
+		
+		for(String path : nlp_result_map.keySet()) {
+			if(path.startsWith(prefix) && (lxr_type.equals("ALL") || ca.loadCommentsTypes().get(path).equals(lxr_type))) {
+				result_set.add(nlp_result_map.get(path));
+			}
+		}
+		
+		return result_set;
+		
 	}
 	
 	public int validityRedundantComment(String type) throws IOException{
@@ -220,8 +475,9 @@ public class CommentsQualityAnalysis {
 	 * 
 	 * @throws IOException
 	 * @throws SQLException
+	 * @throws ClassNotFoundException 
 	 */
-	public void completenessCommentedTypeRatio() throws IOException, SQLException{
+	public void completenessCommentedTypeRatio() throws IOException, SQLException, ClassNotFoundException{
 		String spliter = props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter");
 		List<FileCommentTypeCount> commented = loadCommentedEntryFromDB();
 		Map<String,Integer> fileAllEntries = null;
@@ -274,23 +530,75 @@ public class CommentsQualityAnalysis {
 		writer.close();
 	}
 	
-	public Map<String,Integer> getAllEntries(String filePath) throws SQLException{
-		Map<String,Integer> typeAndCount = new HashMap<String,Integer>();
-		Connection conn = connectDB("lxr");
-		Statement stmt = conn.createStatement();
-		String sql = "select d.declaration,count(*) as number from lxr_symbols s, lxr_declarations d, lxr_indexes i " +
-				"where s.symid=i.symid and i.type=d.declid and d.declaration != 'local variable' and i.fileid=(select f.fileid from " +
-				"lxr_files f, lxr_releases r where f.filename='"+filePath+"' and r.releaseid='linux-3.5.4' and f.fileid=r.fileid order by f.fileid asc limit 1)  GROUP BY d.declaration;";
-		log.info(sql);
-		ResultSet rs = stmt.executeQuery(sql);
-		while(rs.next()){
-			typeAndCount.put(rs.getString(1), rs.getInt(2));
+	/**
+	 * 获得指定文件中的注释入口数
+	 * @param filePath
+	 * @return  key是lxr类型，value是相应类型的注释入口数
+	 * @throws SQLException
+	 * @throws FileNotFoundException
+	 * @throws ClassNotFoundException
+	 * @throws IOException
+	 */
+	public Map<String,Integer> getAllEntries(String filePath) throws SQLException, FileNotFoundException, ClassNotFoundException, IOException{
+		if(entry_map == null) {
+			entry_map = getAllEntries();
 		}
-		rs.close();
-		stmt.close();
-		conn.close();
 		
-		return typeAndCount;
+		CommentEntryCount cec = entry_map.get(filePath);
+		if(cec != null) {
+			return cec.getType_count();
+		}
+		
+		return null;
+	}
+	
+	/**
+	 * 获取全部代码的注释入口，第一次从lxr数据库读取，并将结果序列化到文件保存，后面直接从文件反序列化得到
+	 * @return
+	 * @throws SQLException
+	 * @throws FileNotFoundException
+	 * @throws IOException
+	 * @throws ClassNotFoundException
+	 */
+	public Map<String,CommentEntryCount> getAllEntries() throws SQLException, FileNotFoundException, IOException, ClassNotFoundException{
+		File all_entries_file = new File(props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.allEntries"));
+		if(all_entries_file.exists()) {
+			ObjectInputStream ois = new ObjectInputStream(new FileInputStream(all_entries_file));
+			entry_map = (Map<String,CommentEntryCount>)ois.readObject();
+			ois.close();
+		} else {
+			entry_map = new HashMap<String,CommentEntryCount>();
+			Connection conn = connectDB("lxr");
+			Statement stmt = conn.createStatement();
+			String sql = "select f.filename, d.declaration, count(*) as number from lxr_files f, lxr_declarations d, lxr_indexes i " +
+					"where f.fileid=i.fileid and i.type=d.declid and d.declaration != 'local variable' and f.fileid in (select r.fileid from " + 
+							"lxr_releases r where r.releaseid='linux-3.5.4') GROUP BY f.filename, d.declaration;";
+			ResultSet rs = stmt.executeQuery(sql);
+			while(rs.next()){
+				String path = rs.getString(1);
+				String type = rs.getString(2);
+				int count = rs.getInt(3);
+				CommentEntryCount entry = null;
+				if(entry_map.containsKey(path)) {
+					entry = entry_map.get(path);
+				} else {
+					entry = new CommentEntryCount(path);
+					entry_map.put(path, entry);
+				}
+				entry.addType(type, count);
+			}
+			rs.close();
+			stmt.close();
+			conn.close();
+			
+			ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(all_entries_file));
+			oos.writeObject(entry_map);
+			oos.flush();
+			oos.close();
+		}
+		
+		return entry_map;
+		
 	}
 	
 	public List<FileCommentTypeCount> loadCommentedEntryFromDB() throws SQLException{

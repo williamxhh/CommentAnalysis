@@ -7,12 +7,20 @@ import java.util.List;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
+import mysql.data.filter.CategoryTagFilter;
+import mysql.data.filter.DoNothingFilter;
 import mysql.data.filter.FilterBase;
+import mysql.data.filter.HtmlFilter;
+import mysql.data.filter.IscasLinkFilter;
+import mysql.data.filter.PunctuationFilter;
+import mysql.data.filter.SourceCodeLineByLineCommentFilter;
 
 public class WordSeg {
 	public static Logger logger = Logger.getLogger(WordSeg.class);
 	public static int NO_POS_TAG = 0;
 	public static int POS_TAG = 1;
+	public static FilterBase SEG_FILTER = new CategoryTagFilter(new HtmlFilter(new IscasLinkFilter(new PunctuationFilter(new SourceCodeLineByLineCommentFilter(new  DoNothingFilter())))));
+	public static FilterBase SEG_FILTER_WITHPUNC = new CategoryTagFilter(new HtmlFilter(new IscasLinkFilter(new SourceCodeLineByLineCommentFilter(new DoNothingFilter()))));
 	
 	public static String transString(String aidString, String ori_encoding,
 			String new_encoding) {
