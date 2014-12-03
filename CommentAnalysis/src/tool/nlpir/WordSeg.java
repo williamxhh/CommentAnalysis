@@ -19,6 +19,9 @@ public class WordSeg {
 	public static Logger logger = Logger.getLogger(WordSeg.class);
 	public static int NO_POS_TAG = 0;
 	public static int POS_TAG = 1;
+	public static char NOUN = 'n';
+	public static char VERB = 'v';
+	public static char PUNCTUATION = 'w';
 	public static FilterBase SEG_FILTER = new CategoryTagFilter(new HtmlFilter(new IscasLinkFilter(new PunctuationFilter(new SourceCodeLineByLineCommentFilter(new  DoNothingFilter())))));
 	public static FilterBase SEG_FILTER_WITHPUNC = new CategoryTagFilter(new HtmlFilter(new IscasLinkFilter(new SourceCodeLineByLineCommentFilter(new DoNothingFilter()))));
 	

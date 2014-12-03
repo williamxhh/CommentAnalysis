@@ -276,11 +276,11 @@ public class CommentsQualityAnalysis {
 							WordSeg.POS_TAG, WordSeg.SEG_FILTER_WITHPUNC));
 					for (String w : result.getWord_list()) {
 						int index = w.lastIndexOf('/');
-						if (w.charAt(index + 1) == 'n') {
+						if (w.charAt(index + 1) == WordSeg.NOUN) {
 							result.getNoun_list().add(w.substring(0, index));
-						} else if (w.charAt(index + 1) == 'v') {
+						} else if (w.charAt(index + 1) == WordSeg.VERB) {
 							result.getVerb_list().add(w.substring(0, index));
-						} else if (w.charAt(index + 1) != 'w') {
+						} else if (w.charAt(index + 1) != WordSeg.PUNCTUATION) {
 							result.getOther_list().add(w.substring(0, index));
 						}
 					}

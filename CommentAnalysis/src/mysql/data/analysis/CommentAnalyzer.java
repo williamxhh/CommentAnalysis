@@ -1231,8 +1231,8 @@ public class CommentAnalyzer {
 					logger.info("#APPEND#:\t" + current_comment_seg.get(nextIndex));
 					++nextIndex;
 				} else {
-					template_format.append(getColorString(current_comment_seg.get(nextIndex)));
-					logger.info("#APPEND_MATCH#:\t" + getColorString(current_comment_seg.get(nextIndex)));
+					template_format.append(getColorString(current_comment_seg.get(nextIndex), "red"));
+					logger.info("#APPEND_MATCH#:\t" + getColorString(current_comment_seg.get(nextIndex), "red"));
 					++nextIndex;
 					++nextIndexInTemplate;
 				}
@@ -1251,9 +1251,9 @@ public class CommentAnalyzer {
 		return template_format.toString();
 	}
 	
-	private String getColorString(String input) {
+	public String getColorString(String input, String color) {
 		StringBuilder sb = new StringBuilder();
-		sb.append("<b><font color = 'red'>").append(input).append("</font></b>");
+		sb.append("<b><font color = '" + color + "'>").append(input).append("</font></b>");
 		return sb.toString();
 	}
 	

@@ -59,6 +59,7 @@ import javax.swing.tree.TreeNode;
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 
+import tool.nlpir.WordSeg;
 import mysql.data.analysis.CommentAnalyzer;
 import mysql.data.analysis.quality.CommentsQualityAnalysis;
 import mysql.data.analysisDB.entity.JudgeTableInfo;
@@ -124,6 +125,11 @@ public class EvaluationTool extends JFrame {
 	ButtonGroup template_type_bg = new ButtonGroup();
 	private JRadioButton template_type_same_type_radio_btn;
 	private JRadioButton template_type_same_editor_radio_btn;
+	ButtonGroup color_type_bg = new ButtonGroup();
+	private JRadioButton color_type_noun_radio_btn;
+	private JRadioButton color_type_verb_radio_btn;
+	private JRadioButton color_type_other_radio_btn;
+	private JRadioButton color_type_template_radio_btn;
 	private JPanel judgePanel;
 	private JLabel source_code_url_label;
 	private JPanel reportPanel;
@@ -766,6 +772,63 @@ public class EvaluationTool extends JFrame {
 		}
 		return template_type_same_type_radio_btn;
 	}
+	
+	private JRadioButton getColorTypeTemplateRadioButton() {
+		if(color_type_template_radio_btn == null) {
+			color_type_template_radio_btn = new JRadioButton();
+			color_type_template_radio_btn.setText("模板");
+			color_type_template_radio_btn.setSelected(true);
+			color_type_template_radio_btn.addActionListener(new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					jRadioButtonActionActionPerformed(e);
+				}
+			});
+		}
+		return color_type_template_radio_btn;
+	}
+	
+	private JRadioButton getColorTypeNounRadioButton() {
+		if(color_type_noun_radio_btn == null) {
+			color_type_noun_radio_btn = new JRadioButton();
+			color_type_noun_radio_btn.setText("名词");
+			color_type_noun_radio_btn.addActionListener(new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					jRadioButtonActionActionPerformed(e);
+				}
+			});
+		}
+		return color_type_noun_radio_btn;
+	}
+	
+	private JRadioButton getColorTypeVerbRadioButton() {
+		if(color_type_verb_radio_btn == null) {
+			color_type_verb_radio_btn = new JRadioButton();
+			color_type_verb_radio_btn.setText("动词");
+			color_type_verb_radio_btn.addActionListener(new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					jRadioButtonActionActionPerformed(e);
+				}
+			});
+		}
+		return color_type_verb_radio_btn;
+	}
+	
+	private JRadioButton getColorTypeOtherRadioButton() {
+		if(color_type_other_radio_btn == null) {
+			color_type_other_radio_btn = new JRadioButton();
+			color_type_other_radio_btn.setText("其他");
+			color_type_other_radio_btn.addActionListener(new ActionListener() {
+				@Override
+				public void actionPerformed(ActionEvent e) {
+					jRadioButtonActionActionPerformed(e);
+				}
+			});
+		}
+		return color_type_other_radio_btn;
+	}
 
 	private JLabel getJLabel8() {
 		if (jLabel8 == null) {
@@ -1156,10 +1219,23 @@ public class EvaluationTool extends JFrame {
 			
 			left_panel.add(template_type_panel, BorderLayout.SOUTH);
 			
+			JPanel color_type_panel = new JPanel();
+			color_type_panel.setLayout(new GridLayout(1,4));
+			color_type_panel.add(getColorTypeTemplateRadioButton());
+			color_type_panel.add(getColorTypeNounRadioButton());
+			color_type_panel.add(getColorTypeVerbRadioButton());
+			color_type_panel.add(getColorTypeOtherRadioButton());
+			color_type_bg.add(getColorTypeTemplateRadioButton());
+			color_type_bg.add(getColorTypeNounRadioButton());
+			color_type_bg.add(getColorTypeVerbRadioButton());
+			color_type_bg.add(getColorTypeOtherRadioButton());
+			
+			
 			JPanel comments_info_panel = new JPanel();
 			comments_info_panel.setLayout(new BorderLayout());
 			comments_info_panel.add(getJTreeCommentTypeComboBox(),BorderLayout.NORTH);
 			comments_info_panel.add(getJTreeCommentInfoScrollPane(),BorderLayout.CENTER);
+			comments_info_panel.add(color_type_panel, BorderLayout.SOUTH);
 			
 			JSplitPane ver_split_pane = new JSplitPane(JSplitPane.VERTICAL_SPLIT,getJTreeStatInfoScrollPane(),comments_info_panel);
 			ver_split_pane.setDividerSize(3);
@@ -1332,7 +1408,13 @@ public class EvaluationTool extends JFrame {
 			// setTitle(((JRadioButton)source).getText());
 		} else if (source == validation_invalid_radio_btn) {
 			// setTitle(((JRadioButton)source).getText());
-		} else if (source == template_type_same_editor_radio_btn || source == template_type_same_type_radio_btn) {
+		} else if (source == template_type_same_editor_radio_btn || source == template_type_same_type_radio_btn || source == color_type_template_radio_btn) {
+			template_type_same_editor_radio_btn.setEnabled(true);
+			template_type_same_type_radio_btn.setEnabled(true);
+			updateTreeCommentInfo();
+		} else if (source == color_type_noun_radio_btn || source == color_type_verb_radio_btn || source == color_type_other_radio_btn) {
+			template_type_same_editor_radio_btn.setEnabled(false);
+			template_type_same_type_radio_btn.setEnabled(false);
 			updateTreeCommentInfo();
 		}
 	}
@@ -1597,6 +1679,42 @@ public class EvaluationTool extends JFrame {
 		
 		private StringBuilder info;
 		private StringBuilder comments;
+		WordSeg wordSeg = new WordSeg();
+		
+		/**
+		 * 将注释按词性着色
+		 * @param pos_tag   词性符号
+		 * @param color     颜色
+		 * @param content   原始注释
+		 * @return
+		 */
+		private String getColorString(char pos_tag, String color, String content) {
+			StringBuilder result = new StringBuilder();
+			List<String> seg_result = wordSeg.segmentation(content,WordSeg.POS_TAG, WordSeg.SEG_FILTER_WITHPUNC, true);
+			
+			if(pos_tag == WordSeg.PUNCTUATION) {
+				for (String w : seg_result) {
+					int index = w.lastIndexOf('/');
+					if (w.charAt(index + 1) != pos_tag && w.charAt(index + 1) != WordSeg.NOUN && w.charAt(index + 1) != WordSeg.VERB) {
+						result.append(ca.getColorString(w.substring(0, index), color));
+					} else {
+						result.append(w.substring(0, index));
+					}
+				}
+			} else {
+				for (String w : seg_result) {
+					int index = w.lastIndexOf('/');
+					if (w.charAt(index + 1) == pos_tag) {
+						result.append(ca.getColorString(w.substring(0, index), color));
+					} else {
+						result.append(w.substring(0, index));
+					}
+				}
+			}
+			
+			
+			return result.toString();
+		}
 
 		@Override
 		public void run() {
@@ -1686,7 +1804,17 @@ public class EvaluationTool extends JFrame {
 							template_word_stat.put(type, wordCounter);
 						}
 						
-						String color_info = getColoredInfo(path, template_type);
+						String color_info = "";
+						if(color_type_template_radio_btn.isSelected()) {
+							color_info = getColoredInfo(path, template_type);
+						} else if (color_type_noun_radio_btn.isSelected()) {
+							color_info = getColorString(WordSeg.NOUN, "blue", entry.getValue());
+						} else if (color_type_verb_radio_btn.isSelected()) {
+							color_info = getColorString(WordSeg.VERB, "blue", entry.getValue());
+						} else if (color_type_other_radio_btn.isSelected()) {
+							color_info = getColorString(WordSeg.PUNCTUATION, "blue", entry.getValue());
+						}
+						
 						comments.append(color_info);
 						comments.append("<br/><br/>");
 						
