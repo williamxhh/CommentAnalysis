@@ -1061,6 +1061,12 @@ public class EvaluationTool extends JFrame {
 			tree_selected_path_text_field = new JTextField();
 			tree_selected_path_text_field.setMinimumSize(new Dimension(40, 5));
 
+			tree_selected_path_text_field.addMouseListener(new MouseAdapter() {
+				public void mouseClicked(MouseEvent event) {
+					tree_selected_path_text_fieldMouseMouseClicked(event);
+				}
+			});
+
 			tree_selected_path_text_field.addFocusListener(new FocusListener() {
 
 				@Override
@@ -1718,6 +1724,24 @@ public class EvaluationTool extends JFrame {
 			}
 
 			view_path_text_field.selectAll();
+		}
+	}
+
+	private void tree_selected_path_text_fieldMouseMouseClicked(MouseEvent event) {
+		String selected_path = comment_path_list.getSelectedValue();
+		if (selected_path != null) {
+			if (comment_types == null) {
+				loadCommentsTypes();
+			}
+
+			if (comment_types.get(selected_path).equals("file")) {
+				tree_selected_path_text_field.setText(selected_path);
+			} else {
+				tree_selected_path_text_field.setText(selected_path.substring(
+						0, selected_path.lastIndexOf("/")));
+			}
+
+			tree_selected_path_text_field.selectAll();
 		}
 	}
 
