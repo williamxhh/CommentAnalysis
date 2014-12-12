@@ -4,6 +4,36 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AlgorithmsUtil {
+	
+	public int editDistance(List<String> l1, List<String> l2) {
+		int len1 = l1.size();
+		int len2 = l2.size();
+		
+		int[][] distance = new int[len1 + 1][len2 + 1];
+		
+		for(int i = 0; i <= len1; ++i) {
+			distance[i][0] = i;
+		}
+		
+		for(int j = 0; j <= len2; ++j) {
+			distance[0][j] = j;
+		}
+		
+		for(int i = 1; i <= len1; ++i) {
+			for(int j = 1; j <= len2; ++j) {
+				if(l1.get(i-1).equals(l2.get(j-1))) {
+					distance[i][j] = distance[i-1][j-1];
+				} else {
+					distance[i][j] = distance[i-1][j-1] + 1;
+				}
+				
+				distance[i][j] = Math.min(distance[i][j], Math.min(distance[i-1][j] + 1, distance[i][j-1] + 1));
+			}
+		}
+		
+		return distance[len1][len2];
+	}
+	
 	public List<String> longestCommonString(List<String> l1, List<String> l2) {
 		List<String> common = new ArrayList<String>();
 		if(l1 == null || l2 == null || l1.size() == 0 || l2.size() == 0) {
@@ -91,5 +121,7 @@ public class AlgorithmsUtil {
 		for(String s: ins.longestCommonString(l1, l2)){
 			System.out.print(s + "£¬");
 		}
+		System.out.println();
+		System.out.println(ins.editDistance(l1, l2));
 	}
 }
