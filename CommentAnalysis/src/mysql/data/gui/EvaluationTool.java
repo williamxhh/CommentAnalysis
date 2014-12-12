@@ -14,11 +14,14 @@ import java.awt.event.ItemListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URL;
 import java.sql.SQLException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -28,10 +31,12 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 import javax.swing.ButtonGroup;
+import javax.swing.ComboBoxModel;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JEditorPane;
+import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
@@ -112,6 +117,12 @@ public class EvaluationTool extends JFrame {
 	private JTextField tree_selected_path_text_field;
 
 	private JButton comment_filter_btn;
+	
+	private JButton file_chooser_btn;
+	
+	private JFileChooser fc;
+	
+	private List<String> file_chooser_path_list;
 
 	private JLabel jLabel1;
 
@@ -184,6 +195,14 @@ public class EvaluationTool extends JFrame {
 	private JComboBox<String> comment_type_combo_box;
 
 	private JComboBox<String> judge_comment_type_combo_box;
+	
+	private ItemListener judge_comment_type_combo_box_item_listener = new ItemListener() {
+
+		public void itemStateChanged(ItemEvent event) {
+			if(event.getStateChange() == ItemEvent.SELECTED)
+				judge_comment_type_combo_boxItemItemStateChanged(event);
+		}
+	};
 
 	private JLabel jLabel18;
 
@@ -705,12 +724,7 @@ public class EvaluationTool extends JFrame {
 			judge_comment_type_combo_box = new JComboBox<String>();
 			judge_comment_type_combo_box.setDoubleBuffered(false);
 			judge_comment_type_combo_box.setBorder(null);
-			judge_comment_type_combo_box.addItemListener(new ItemListener() {
-
-				public void itemStateChanged(ItemEvent event) {
-					judge_comment_type_combo_boxItemItemStateChanged(event);
-				}
-			});
+			judge_comment_type_combo_box.addItemListener(judge_comment_type_combo_box_item_listener);
 		}
 		return judge_comment_type_combo_box;
 	}
@@ -1044,6 +1058,23 @@ public class EvaluationTool extends JFrame {
 		}
 		return comment_filter_btn;
 	}
+	
+	private JButton getFileChooserBtn() {
+		if (file_chooser_btn == null) {
+			file_chooser_btn = new JButton();
+			file_chooser_btn.setText("从文件加载");
+			file_chooser_btn.addMouseListener(new MouseAdapter() {
+				public void mouseClicked(MouseEvent event) {
+					file_chooser_btnMouseMouseClicked(event);
+				}
+			});
+			fc = new JFileChooser(new File("."));
+			fc.setMultiSelectionEnabled(false);
+			fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
+		}
+		
+		return file_chooser_btn;
+	}
 
 	private JTextField getTreeSelectedPathJTextField() {
 		if (tree_selected_path_text_field == null) {
@@ -1267,9 +1298,14 @@ public class EvaluationTool extends JFrame {
 
 			score_panel.add(score_grid_panel);
 			comment_info_panel.add(score_panel, BorderLayout.SOUTH);
+			
+			JPanel left_panel = new JPanel(new BorderLayout());
+			left_panel.add(getJScrollPane1(),BorderLayout.CENTER);
+			left_panel.add(getFileChooserBtn(), BorderLayout.SOUTH);
+			
 
 			JSplitPane hor_split_pane = new JSplitPane(
-					JSplitPane.HORIZONTAL_SPLIT, getJScrollPane1(),
+					JSplitPane.HORIZONTAL_SPLIT, left_panel,
 					comment_info_panel);
 			hor_split_pane.setDividerSize(3);
 			hor_split_pane.setDividerLocation(250);
@@ -1349,15 +1385,6 @@ public class EvaluationTool extends JFrame {
 			if (allComments == null) {
 				loadComments();
 			}
-			Set<String> allTypes = new HashSet<String>();
-			for (String t : comment_types.values()) {
-				allTypes.add(t);
-			}
-
-			judge_comment_type_combo_box.addItem("ALL");
-			for (String t : allTypes) {
-				judge_comment_type_combo_box.addItem(t);
-			}
 
 			ep = new EvaluationPreparation();
 			try {
@@ -1377,7 +1404,7 @@ public class EvaluationTool extends JFrame {
 			judgeList = ep.loadJudgeInfoFromDB();
 		}
 
-		updateCommentPathList(0, "ALL");
+		updateCommentPathList(0, "ALL", true);
 	}
 
 	public static void main(String[] args) throws Exception {
@@ -1421,6 +1448,28 @@ public class EvaluationTool extends JFrame {
 
 	private void comment_filter_btnMouseMouseClicked(MouseEvent event) {
 		filter_view_comment();
+	}
+	
+	private void file_chooser_btnMouseMouseClicked(MouseEvent event) {
+		int return_val = fc.showOpenDialog(EvaluationTool.this);
+		if(return_val == JFileChooser.APPROVE_OPTION) {
+			File file = fc.getSelectedFile();
+			file_chooser_path_list = new ArrayList<String>();
+			try {
+				BufferedReader reader = new BufferedReader(new FileReader(file));
+				String line = "";
+				while((line = reader.readLine()) != null) {
+					if(!line.equals("")){
+						file_chooser_path_list.add(line.trim());
+					}
+				}
+				reader.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			
+			updateCommentPathList(0, "ALL", true);
+		}
 	}
 
 	private void filter_view_comment() {
@@ -1480,17 +1529,17 @@ public class EvaluationTool extends JFrame {
 			String type = judge_comment_type_combo_box.getSelectedItem()
 					.toString();
 			if (type == null) {
-				updateCommentPathList(1, "ALL");
+				updateCommentPathList(1, "ALL", false);
 			} else {
-				updateCommentPathList(1, type);
+				updateCommentPathList(1, type, false);
 			}
 		} else if (source == judge_type_unjudge_radio_btn) {
 			String type = judge_comment_type_combo_box.getSelectedItem()
 					.toString();
 			if (type == null) {
-				updateCommentPathList(0, "ALL");
+				updateCommentPathList(0, "ALL", false);
 			} else {
-				updateCommentPathList(0, type);
+				updateCommentPathList(0, type, false);
 			}
 		} else if (source == validation_empty_radio_btn) {
 			// setTitle(((JRadioButton)source).getText());
@@ -1519,18 +1568,33 @@ public class EvaluationTool extends JFrame {
 	 *            0表示未评价，1表示已评价
 	 * @param comment_type
 	 *            ALL表示全部类型，其他的指定特定的类型
+	 * @param update_type_combo_box
+	 * 			  是否更新注释类型的下拉列表           
+	 * 
 	 */
-	private void updateCommentPathList(int state, String comment_type) {
+	private void updateCommentPathList(int state, String comment_type, boolean update_type_combo_box) {
 		int total_comment_count = 0;
 		int judged_comment_count = 0;
 
 		if (judgeList != null) {
 			DefaultListModel<String> listModel = new DefaultListModel<String>();
 			TreeSet<JudgeTableInfo> list = new TreeSet<JudgeTableInfo>();
-			for (JudgeTableInfo jti : judgeList.values()) {
-				list.add(jti);
+			if(file_chooser_path_list == null) {
+				for (JudgeTableInfo jti : judgeList.values()) {
+					list.add(jti);
+				}
+			} else {
+				for(String path : file_chooser_path_list) {
+					list.add(judgeList.get(path));
+				}
 			}
+			
+			//保存不同的类型，用来更新注释类型的下拉列表
+			Set<String> allTypes = new HashSet<String>();
+			
 			for (JudgeTableInfo jti : list) {
+				allTypes.add(comment_types.get(jti.getComment_path()));
+				
 				if (state == 0) {
 					if (comment_types.get(jti.getComment_path()).equals(
 							comment_type)
@@ -1558,6 +1622,17 @@ public class EvaluationTool extends JFrame {
 			comment_path_list.setModel(listModel);
 			total_comment_label.setText(total_comment_count + "");
 			judged_comment_label.setText(judged_comment_count + "");
+			
+			if(update_type_combo_box) {
+				judge_comment_type_combo_box.removeAllItems();
+				//修改下拉列表项目前去掉listener，以免误触发
+				judge_comment_type_combo_box.removeItemListener(judge_comment_type_combo_box_item_listener);
+				judge_comment_type_combo_box.addItem("ALL");
+				for (String t : allTypes) {
+					judge_comment_type_combo_box.addItem(t);
+				}
+				judge_comment_type_combo_box.addItemListener(judge_comment_type_combo_box_item_listener);
+			}
 		}
 	}
 
@@ -1642,13 +1717,14 @@ public class EvaluationTool extends JFrame {
 	private void judge_comment_type_combo_boxItemItemStateChanged(
 			ItemEvent event) {
 		@SuppressWarnings("unchecked")
-		String selected_type = ((JComboBox<String>) event.getSource())
-				.getSelectedItem().toString();
-		boolean unjudged = judge_type_unjudge_radio_btn.isSelected();
-		if (unjudged) {
-			updateCommentPathList(0, selected_type);
-		} else {
-			updateCommentPathList(1, selected_type);
+		Object selected_item = ((JComboBox<String>) event.getSource()).getSelectedItem();
+		if(selected_item != null) {
+			boolean unjudged = judge_type_unjudge_radio_btn.isSelected();
+			if (unjudged) {
+				updateCommentPathList(0, selected_item.toString(), false);
+			} else {
+				updateCommentPathList(1, selected_item.toString(), false);
+			}
 		}
 	}
 
