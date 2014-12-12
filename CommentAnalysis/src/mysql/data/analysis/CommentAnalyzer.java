@@ -30,7 +30,12 @@ import mysql.data.algorithms.AlgorithmsUtil;
 import mysql.data.analysis.quality.CommentsQualityAnalysis;
 import mysql.data.analysisDB.entity.CommentTableInfo;
 import mysql.data.analysisDB.entity.TemplateTableInfo;
+import mysql.data.filter.CategoryTagFilter;
+import mysql.data.filter.DoNothingFilter;
 import mysql.data.filter.FilterBase;
+import mysql.data.filter.HtmlFilter;
+import mysql.data.filter.IscasLinkFilter;
+import mysql.data.filter.SourceCodeLineByLineCommentFilter;
 import mysql.data.filter.TemplateCandidateFilter;
 import mysql.data.util.PropertiesUtil;
 
@@ -45,6 +50,10 @@ public class CommentAnalyzer {
 	public static final int TEMPLATE_SAME_TYPE = 1;
 
 	public static final int TEMPLATE_SAME_EDITOR = 2;
+	
+	public static FilterBase COMMON_FILTER = new CategoryTagFilter(new HtmlFilter(
+			new IscasLinkFilter(new SourceCodeLineByLineCommentFilter(
+					new DoNothingFilter()))));
 
 	public static boolean LOADDATATODB = false;
 

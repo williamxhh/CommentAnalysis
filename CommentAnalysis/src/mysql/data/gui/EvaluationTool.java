@@ -59,12 +59,6 @@ import javax.swing.tree.TreeNode;
 import mysql.data.analysis.CommentAnalyzer;
 import mysql.data.analysis.quality.CommentsQualityAnalysis;
 import mysql.data.analysisDB.entity.JudgeTableInfo;
-import mysql.data.filter.CategoryTagFilter;
-import mysql.data.filter.DoNothingFilter;
-import mysql.data.filter.FilterBase;
-import mysql.data.filter.HtmlFilter;
-import mysql.data.filter.IscasLinkFilter;
-import mysql.data.filter.SourceCodeLineByLineCommentFilter;
 import mysql.data.util.PropertiesUtil;
 
 import org.apache.log4j.Level;
@@ -91,8 +85,6 @@ public class EvaluationTool extends JFrame {
 	Map<String, String> tree_comment_info = null;
 
 	String source_code_url = null;
-
-	FilterBase filter = null;
 
 	EvaluationPreparation ep = null;
 
@@ -268,9 +260,6 @@ public class EvaluationTool extends JFrame {
 				allComments = ca.getAllComments(loadFromFile);
 			}
 			filteredComments = new HashMap<String, String>();
-			filter = new CategoryTagFilter(new HtmlFilter(
-					new IscasLinkFilter(new SourceCodeLineByLineCommentFilter(
-							new DoNothingFilter()))));
 			if (comment_types == null) {
 				loadCommentsTypes();
 			}
@@ -303,7 +292,7 @@ public class EvaluationTool extends JFrame {
 	}
 
 	private void initComponents() {
-		setTitle("源代码阅读注释分析工具");
+		setTitle("源代码分析注释分析工具");
 		setLayout(new BorderLayout());
 		add(getJTabbedPane0());
 		setSize(714, 738);
@@ -1182,10 +1171,12 @@ public class EvaluationTool extends JFrame {
 			judgePanel = new JPanel();
 			judgePanel.setLayout(new BorderLayout());
 
+			//最上面的注释类型
 			JPanel comment_type_pane = new JPanel(new FlowLayout());
 			comment_type_pane.add(getJLabel3());
 			comment_type_pane.add(getJudgeCommentTypeComboBox());
 
+			// 共 *条注释，已评*条
 			JPanel comment_count_pane = new JPanel(new FlowLayout());
 			comment_count_pane.add(getJLabel4());
 			comment_count_pane.add(getTotal_comment_label());
@@ -1193,6 +1184,7 @@ public class EvaluationTool extends JFrame {
 			comment_count_pane.add(getJudged_comment_label());
 			comment_count_pane.add(getJLabel8());
 
+			// 评阅状态  未评阅  已评阅
 			JPanel comment_judge_state_pane = new JPanel(new FlowLayout());
 			comment_judge_state_pane.add(getUnjudgeRadioButton());
 			comment_judge_state_pane.add(getJudgedRadioButton());
@@ -1206,6 +1198,7 @@ public class EvaluationTool extends JFrame {
 
 			judgePanel.add(header_pane, BorderLayout.NORTH);
 
+			//右侧主要的显示注释内容的面板
 			JPanel comment_info_panel = new JPanel(new BorderLayout());
 
 			JPanel url_panel = new JPanel(new GridLayout(3, 1));
@@ -1415,7 +1408,7 @@ public class EvaluationTool extends JFrame {
 					types.add(comment_types.get(entry.getKey()));
 					content.append("###################   " + entry.getKey()
 							+ "   ###################\r\n"
-							+ filter.getText(entry.getValue()) + "\r\n\r\n");
+							+ CommentAnalyzer.COMMON_FILTER.getText(entry.getValue()) + "\r\n\r\n");
 				}
 			}
 
@@ -1439,7 +1432,7 @@ public class EvaluationTool extends JFrame {
 				if (comment_types.get(entry.getKey()).equals(type)) {
 					content.append("###################   " + entry.getKey()
 							+ "   ###################\r\n"
-							+ filter.getText(entry.getValue()) + "\r\n\r\n");
+							+ CommentAnalyzer.COMMON_FILTER.getText(entry.getValue()) + "\r\n\r\n");
 				}
 			}
 
