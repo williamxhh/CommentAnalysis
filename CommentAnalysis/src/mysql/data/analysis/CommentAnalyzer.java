@@ -37,6 +37,7 @@ import mysql.data.filter.HtmlFilter;
 import mysql.data.filter.IscasLinkFilter;
 import mysql.data.filter.SourceCodeLineByLineCommentFilter;
 import mysql.data.filter.TemplateCandidateFilter;
+import mysql.data.util.ConnectionUtil;
 import mysql.data.util.PropertiesUtil;
 
 import org.apache.log4j.Level;
@@ -59,12 +60,6 @@ public class CommentAnalyzer {
 
 	private Properties props;
 
-	private Connection source_conn;
-
-	private Connection storage_conn;
-
-	private Connection lxr_conn;
-
 	private Map<String, String> allComments = null;
 
 	private Map<String, String> comment_types = null;
@@ -81,90 +76,6 @@ public class CommentAnalyzer {
 		logger.setLevel(Level.WARN);
 		this.loadFromFile = loadFromFile;
 		props = PropertiesUtil.getProperties();
-		StringBuilder sourceurl = new StringBuilder();
-		sourceurl
-				.append("jdbc:mysql://")
-				.append(props.getProperty("mysql.data.DataSource.dbserver.ip",
-						"192.168.160.131"))
-				.append(":")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.port", "3306"))
-				.append("/")
-				.append(props.getProperty("mysql.data.DataSource.commentdb",
-						"pku_comment"))
-				.append("?user=")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.user", "root"))
-				.append("&password=")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.pass", "123123"));
-
-		StringBuilder storageurl = new StringBuilder();
-		storageurl
-				.append("jdbc:mysql://")
-				.append(props.getProperty("mysql.data.DataSource.dbserver.ip",
-						"192.168.160.131"))
-				.append(":")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.port", "3306"))
-				.append("/")
-				.append(props
-						.getProperty(
-								"mysql.data.analysis.CommentAnalyzer.commentAnalysisdb",
-								"pkuCommentAnalysis"))
-				.append("?user=")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.user", "root"))
-				.append("&password=")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.pass", "123123"));
-
-		StringBuilder lxrurl = new StringBuilder();
-		lxrurl.append("jdbc:mysql://")
-				.append(props.getProperty("mysql.data.DataSource.dbserver.ip",
-						"192.168.160.131"))
-				.append(":")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.port", "3306"))
-				.append("/")
-				.append(props.getProperty("mysql.data.CommentClassifier.lxrdb",
-						"lxr"))
-				.append("?user=")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.user", "root"))
-				.append("&password=")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.pass", "123123"));
-
-		try {
-			Class.forName("com.mysql.jdbc.Driver");
-			this.source_conn = DriverManager
-					.getConnection(sourceurl.toString());
-			this.storage_conn = DriverManager.getConnection(storageurl
-					.toString());
-			this.lxr_conn = DriverManager.getConnection(lxrurl.toString());
-
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
-	}
-
-	public void closeDBConnection() {
-		try {
-			if (this.source_conn != null && !this.source_conn.isClosed()) {
-				source_conn.close();
-			}
-			if (this.storage_conn != null && !this.storage_conn.isClosed()) {
-				storage_conn.close();
-			}
-			if (this.lxr_conn != null && !this.lxr_conn.isClosed()) {
-				lxr_conn.close();
-			}
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
 	}
 
 	public static void main(String[] args) throws Exception {
@@ -500,7 +411,7 @@ public class CommentAnalyzer {
 			boolean load_template, boolean load_newtemplate)
 			throws SQLException, IOException {
 		Map<String, String> comments = getAllComments(loadFromFile);
-		Statement stmt = storage_conn.createStatement();
+		Statement stmt = ConnectionUtil.getCommentAnalysisConnection().createStatement();
 
 		// Ìî³äcomment±í
 
@@ -724,7 +635,7 @@ public class CommentAnalyzer {
 	public String getType(String filename, String symbolname, int lineNo) {
 		String type = "";
 		try {
-			Statement stmt = lxr_conn.createStatement();
+			Statement stmt = ConnectionUtil.getLxrConnection().createStatement();
 
 			ResultSet rs = stmt
 					.executeQuery("select d.declaration from lxr_declarations AS d WHERE d.declid = (SELECT i.type from lxr_indexes AS i WHERE i.symid = (SELECT s.symid from lxr_symbols AS s WHERE s.symname='"
@@ -788,7 +699,7 @@ public class CommentAnalyzer {
 								props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter"));
 			} else {
 				allComments = new TreeMap<String, String>();
-				Statement stmt = this.source_conn.createStatement();
+				Statement stmt = ConnectionUtil.getCommentConnection().createStatement();
 				for (String pageTitle : getModules()) {
 					allComments.put(pageTitle, getComment(stmt, pageTitle));
 				}
@@ -924,7 +835,7 @@ public class CommentAnalyzer {
 	 */
 	public ArrayList<String> getModules() throws SQLException {
 		ArrayList<String> allModules = new ArrayList<String>();
-		Statement stmt = source_conn.createStatement();
+		Statement stmt = ConnectionUtil.getCommentConnection().createStatement();
 		ResultSet rs;
 		try {
 			rs = stmt
@@ -1009,7 +920,7 @@ public class CommentAnalyzer {
 	public List<String> getFileComments(String filename, String lxrType)
 			throws SQLException {
 		List<String> c = new ArrayList<String>();
-		Statement stmt = this.storage_conn.createStatement();
+		Statement stmt = ConnectionUtil.getCommentAnalysisConnection().createStatement();
 		StringBuilder sql = new StringBuilder();
 		sql.append("select filtered_comment from comment where lxr_type='"
 				+ lxrType + "' and path_file='" + filename + "';");
@@ -1092,7 +1003,7 @@ public class CommentAnalyzer {
 	public Map<String, Integer> getFileComments(String filename)
 			throws SQLException {
 		Map<String, Integer> type_and_comments_count = new HashMap<String, Integer>();
-		Statement stmt = this.storage_conn.createStatement();
+		Statement stmt = ConnectionUtil.getCommentAnalysisConnection().createStatement();
 		StringBuilder sql = new StringBuilder();
 		sql.append("select lxr_type,count(*) from comment where path_file='"
 				+ filename + "' group by lxr_type;");
@@ -1119,7 +1030,7 @@ public class CommentAnalyzer {
 	 */
 	public List<String> getAllCommentedLxrtypes() throws SQLException {
 		List<String> lxrtypes = new ArrayList<String>();
-		Statement stmt = this.storage_conn.createStatement();
+		Statement stmt = ConnectionUtil.getCommentAnalysisConnection().createStatement();
 		StringBuilder sql = new StringBuilder();
 		sql.append("select distinct(lxr_type) from comment;");
 		ResultSet rs = stmt.executeQuery(sql.toString());
@@ -1234,7 +1145,7 @@ public class CommentAnalyzer {
 			}
 		}
 		CommentTableInfo cti = new CommentTableInfo();
-		Statement stmt = this.storage_conn.createStatement();
+		Statement stmt = ConnectionUtil.getCommentAnalysisConnection().createStatement();
 		ResultSet rs = stmt
 				.executeQuery("select * from comment where comment_path=\""
 						+ comment_path + "\";");
@@ -1256,7 +1167,7 @@ public class CommentAnalyzer {
 		}
 
 		TemplateTableInfo tti = new TemplateTableInfo();
-		Statement stmt = this.storage_conn.createStatement();
+		Statement stmt = ConnectionUtil.getCommentAnalysisConnection().createStatement();
 		ResultSet rs = stmt
 				.executeQuery("select * from template where path_file=\""
 						+ path_file + "\" and lxr_type=\"" + lxr_type + "\";");
@@ -1335,7 +1246,7 @@ public class CommentAnalyzer {
 	public List<String> loadNewTemplate(String path, int template_type) {
 		List<String> template = new ArrayList<String>();
 		try {
-			Statement stmt = this.storage_conn.createStatement();
+			Statement stmt = ConnectionUtil.getCommentAnalysisConnection().createStatement();
 			ResultSet rs = null;
 			if (template_type == TEMPLATE_SAME_TYPE) {
 				rs = stmt

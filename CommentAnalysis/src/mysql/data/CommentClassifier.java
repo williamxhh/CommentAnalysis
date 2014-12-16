@@ -20,13 +20,13 @@ import java.util.Set;
 
 import org.apache.log4j.Logger;
 
+import mysql.data.util.ConnectionUtil;
 import mysql.data.util.FileUtil;
 import mysql.data.util.PropertiesUtil;
 
 public class CommentClassifier {
 	private static final Logger log = Logger.getLogger(CommentClassifier.class);
 	private Properties props;
-	private Connection conn;
 	private String rootPath;
 	private String classifiedCommentPath;
 	private String commentAndTypes;
@@ -37,45 +37,16 @@ public class CommentClassifier {
 	
 	public CommentClassifier(){
 		props = PropertiesUtil.getProperties();
-		StringBuilder url = new StringBuilder();
-		url.append("jdbc:mysql://")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.ip","192.168.160.131"))
-			.append(":")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.port","3306"))
-			.append("/")
-			.append(props.getProperty("mysql.data.CommentClassifier.lxrdb","lxr"))
-			.append("?user=")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.user","root"))
-			.append("&password=")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.pass","123123"));
 		
-		try {
-			Class.forName("com.mysql.jdbc.Driver");
-			this.conn = DriverManager.getConnection(url.toString());
-			
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
 		this.rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
 		this.classifiedCommentPath = rootPath+props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.classifiedCommentPath","CLASSIFIED");
 		this.commentAndTypes = props.getProperty("mysql.data.CommentClassifier.commentsAndTypes");
 	}
 	
 	public Connection getConn() {
-		return conn;
+		return ConnectionUtil.getLxrConnection();
 	}
 
-	public void closeDBConnection(){
-		try {
-			if(this.conn!=null&&this.conn.isClosed()){
-				conn.close();
-			}
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
-	}
 	
 	public Set<String> getAllCommentedTypes() throws IOException{
 		File typeFile = new File(commentAndTypes);
@@ -261,7 +232,7 @@ public class CommentClassifier {
 	 */
 	public String getType(String filename,String symbolname,int lineNo) throws SQLException{
 		String type = "";
-		Statement stmt = conn.createStatement();
+		Statement stmt = ConnectionUtil.getLxrConnection().createStatement();
 		
 		ResultSet rs = stmt
 				.executeQuery("select d.declaration from lxr_declarations AS d WHERE d.declid = (SELECT i.type from lxr_indexes AS i WHERE i.symid = (SELECT s.symid from lxr_symbols AS s WHERE s.symname='"
@@ -287,7 +258,6 @@ public class CommentClassifier {
 	public static void main(String[] args) throws IOException {
 		CommentClassifier cc = new CommentClassifier();
 		cc.classifyComment();
-		cc.closeDBConnection();
 		System.out.println("CommentClassifier done");
 	}
 }

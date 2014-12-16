@@ -16,48 +16,17 @@ import java.util.Properties;
 
 import org.apache.log4j.Logger;
 
+import mysql.data.util.ConnectionUtil;
 import mysql.data.util.PropertiesUtil;
 
 
 public class EditBehaviorAnalyzer {
 	private static Logger logger = Logger.getLogger(EditBehaviorAnalyzer.class);
 	private Properties props;
-	private Connection source_conn;
 	Map<String, String> comment_types = null;
 	
 	public EditBehaviorAnalyzer() {
 		props = PropertiesUtil.getProperties();
-		StringBuilder sourceurl = new StringBuilder();
-		sourceurl.append("jdbc:mysql://")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.ip","192.168.160.131"))
-			.append(":")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.port","3306"))
-			.append("/")
-			.append(props.getProperty("mysql.data.DataSource.commentdb","pku_comment"))
-			.append("?user=")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.user","root"))
-			.append("&password=")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.pass","123123"));
-		
-		try {
-			Class.forName("com.mysql.jdbc.Driver");
-			this.source_conn = DriverManager.getConnection(sourceurl.toString());
-			
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
-	}
-	
-	public void closeDBConnection(){
-		try {
-			if(this.source_conn!=null&&!this.source_conn.isClosed()){
-				source_conn.close();
-			}
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
 	}
 	
 	
@@ -75,7 +44,7 @@ public class EditBehaviorAnalyzer {
 	}
 	
 	public void loadCommentBehaviorTimeline() throws SQLException, FileNotFoundException {
-		Statement stmt = source_conn.createStatement();
+		Statement stmt = ConnectionUtil.getCommentConnection().createStatement();
 		String sql = "select p.page_title, r.rev_user_text, r.rev_timestamp, p.page_counter from page as p INNER JOIN revision as r on p.page_id = r.rev_page where p.page_namespace = 0 ORDER BY rev_timestamp ASC;";
 		ResultSet rs = stmt.executeQuery(sql);
 		

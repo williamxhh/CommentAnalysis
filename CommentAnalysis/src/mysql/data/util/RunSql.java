@@ -11,20 +11,13 @@ import java.sql.Statement;
 public class RunSql {
 	public static void main(String[] args) {
 		try{
-			Class.forName("com.mysql.jdbc.Driver");
-
-			String url = "jdbc:mysql://192.168.160.131:3306/pku_comment?user=root&password=123123";
-			Connection conn = DriverManager.getConnection(url);
-			Statement stmt = conn.createStatement();
+			Statement stmt = ConnectionUtil.getCommentConnection().createStatement();
 			String sql = "select c.old_text as content from "
 					+ "(revision as b inner join text as c on b.rev_text_id = c.old_id) "
 					+ "inner join page as a on a.page_latest = b.rev_id where a.page_title='/mm/fremap.c(linux-3.5.4)'";
 			String result = readBlob(stmt, sql);
 			System.out.println(result.length());
 			stmt.close();
-			conn.close();
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}

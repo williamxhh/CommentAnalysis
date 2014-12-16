@@ -18,12 +18,12 @@ import java.util.Properties;
 
 import org.apache.log4j.Logger;
 
+import mysql.data.util.ConnectionUtil;
 import mysql.data.util.PropertiesUtil;
 
 public class DataSource {
 	private static final Logger log = Logger.getLogger(DataSource.class);
 	private Properties props = new Properties();
-	private Connection conn;
 	private String rootPath;
 	//包含所有已注释的函数，宏，变量的路径的文件
 	private String pathFile;
@@ -35,7 +35,6 @@ public class DataSource {
 			DataSource ds = new DataSource();
 			log.info("call ds.loadCommentToFile()");
 			ds.loadCommentToFile();
-			ds.closeDBConnection();
 			System.out.println("DataSource done");
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -45,27 +44,6 @@ public class DataSource {
 	
 	public DataSource(){
 		props = PropertiesUtil.getProperties();
-		StringBuilder url = new StringBuilder();
-		url.append("jdbc:mysql://")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.ip","192.168.160.131"))
-			.append(":")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.port","3306"))
-			.append("/")
-			.append(props.getProperty("mysql.data.DataSource.commentdb","pku_comment"))
-			.append("?user=")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.user","root"))
-			.append("&password=")
-			.append(props.getProperty("mysql.data.DataSource.dbserver.pass","123123"));
-		
-		try {
-			Class.forName("com.mysql.jdbc.Driver");
-			this.conn = DriverManager.getConnection(url.toString());
-			
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
 		
 		rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
 		pathFile = props.getProperty("mysql.data.DataSource.pathFile","path.txt");
@@ -74,18 +52,9 @@ public class DataSource {
 	}
 	
 	public Connection getConn() {
-		return conn;
+		return ConnectionUtil.getCommentConnection();
 	}
 
-	public void closeDBConnection(){
-		try {
-			if(this.conn!=null&&!this.conn.isClosed()){
-				conn.close();
-			}
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
-	}
 	
 	public void loadCommentToFile() throws SQLException{
 		File allModulePath = new File(pathFile);
@@ -102,7 +71,7 @@ public class DataSource {
 	 * @throws SQLException 
 	 */
 	private void loadAllCommentInOneFile() throws SQLException{
-		Statement stmt = conn.createStatement();
+		Statement stmt = ConnectionUtil.getCommentConnection().createStatement();
 		PrintWriter writer = null;
 		try {
 			BufferedReader reader = new BufferedReader(new FileReader(pathFile));
@@ -172,7 +141,7 @@ public class DataSource {
 	 * @throws SQLException 
 	 */
 	private void getModules() throws SQLException {
-		Statement stmt = conn.createStatement();
+		Statement stmt = ConnectionUtil.getCommentConnection().createStatement();
 		ResultSet rs;
 		try {
 			rs = stmt

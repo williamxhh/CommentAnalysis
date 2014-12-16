@@ -19,18 +19,9 @@ import mysql.data.util.PropertiesUtil;
 public class EvaluationPreparation {
 	private static Logger logger = Logger
 			.getLogger(EvaluationPreparation.class);
-	private Connection conn;
-
-	public EvaluationPreparation() {
-		conn = ConnectionUtil.getJudgeConnection();
-	}
-
-	public Connection getConn() {
-		return conn;
-	}
 
 	public boolean hasJudgeInfo() throws SQLException {
-		Statement stmt = conn.createStatement();
+		Statement stmt = ConnectionUtil.getJudgeConnection().createStatement();
 
 		ResultSet rs = stmt.executeQuery("select count(*) from judge;");
 		rs.next();
@@ -46,7 +37,7 @@ public class EvaluationPreparation {
 	public Map<String, JudgeTableInfo> loadJudgeInfoFromDB(){
 		Map<String, JudgeTableInfo> judgeList = new HashMap<String, JudgeTableInfo>();
 		try {
-			Statement stmt = conn.createStatement();
+			Statement stmt = ConnectionUtil.getJudgeConnection().createStatement();
 
 			ResultSet rs = stmt.executeQuery("select * from judge;");
 			while (rs.next()) {
@@ -66,7 +57,7 @@ public class EvaluationPreparation {
 		JudgeTableInfo ins = new JudgeTableInfo();
 		
 		try {
-			Statement stmt = conn.createStatement();
+			Statement stmt = ConnectionUtil.getJudgeConnection().createStatement();
 			ResultSet rs = stmt.executeQuery("select * from judge where comment_path='" + path + "';");
 			if(rs.next()) {
 				ins.format(rs);
@@ -81,7 +72,7 @@ public class EvaluationPreparation {
 	}
 
 	public void insertAllPathToJudgeDB(Set<String> paths) throws SQLException {
-		Statement stmt = conn.createStatement();
+		Statement stmt = ConnectionUtil.getJudgeConnection().createStatement();
 
 		int counter = 0;
 		for (String l : paths) {
@@ -97,7 +88,7 @@ public class EvaluationPreparation {
 	
 	public void updateJudgeInfo(JudgeTableInfo jti){
 		try {
-			Statement stmt = conn.createStatement();
+			Statement stmt = ConnectionUtil.getJudgeConnection().createStatement();
 		
 			StringBuilder sql = new StringBuilder();
 			sql.append("update judge ").append("set validation_state=")
