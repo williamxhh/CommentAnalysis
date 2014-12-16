@@ -1,9 +1,11 @@
 package mysql.data.analysis.quality;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.ObjectInputStream;
@@ -19,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
@@ -31,13 +34,16 @@ import tool.nlpir.WordSeg;
 
 import java.sql.Connection;
 
+import mysql.data.algorithms.AlgorithmsUtil;
 import mysql.data.analysis.CommentAnalyzer;
 import mysql.data.analysis.TXTCommentAnalyzer;
 import mysql.data.analysisDB.entity.FileCommentTypeCount;
+import mysql.data.analysisDB.entity.JudgeTableInfo;
 import mysql.data.filter.DoNothingFilter;
 import mysql.data.filter.FilterBase;
 import mysql.data.filter.IscasChineseCommentExtractor;
 import mysql.data.filter.IscasLinkFilter;
+import mysql.data.gui.EvaluationPreparation;
 import mysql.data.util.CommentEntryCount;
 import mysql.data.util.FileUtil;
 import mysql.data.util.NLPAnalysisResult;
@@ -52,8 +58,13 @@ public class CommentsQualityAnalysis {
 	private Map<String, CommentEntryCount> entry_map = null;
 	private Map<String, NLPAnalysisResult> nlp_result_map = null;
 	
+	//评估规范性的时候使用
+	private EvaluationPreparation ep = null;;
+	private AlgorithmsUtil algo = null;
+	//保存从judge数据库中读入的结果，key是path，value是评分结果
+	private Map<String, JudgeTableInfo> evaluation_map = null;;
+	
 	public static void main(String[] args)  throws IOException, SQLException, ClassNotFoundException{
-		log.setLevel(Level.WARN);
 		CommentsQualityAnalysis cqa = new CommentsQualityAnalysis(true);
 
 		
@@ -71,17 +82,21 @@ public class CommentsQualityAnalysis {
 //		cqa.completenessCommentedTypeRatio();
 //		cqa.completenessFileCommentedRatio(type);
 		
-		log.info("##stat##");
 		String path = "/";
-		String type = "function definition";
+//		String type = "function definition";
+//		String type = "variable definition";
+//		String type = "macro (un)definition";
+		String type = "class, struct, or union member";
 //		cqa.statCommentTypeDistribution(path);
 //		cqa.statCommentedRatio(path);
 //		cqa.statNLPAnalysis(path,type);
 //		log.info(cqa.getAllEntries().get("/virt/kvm/kvm_main.c"));
-		cqa.outputNLPResultToFile(type);
-		
-		log.info("done");
+//		cqa.outputNLPResultToFile(type);
+//		cqa.statWordCounter();
+//		cqa.sampleSubsetForEvaluation();
 //		cqa.completeness(type);
+		cqa.redundantAnalysis();
+//		cqa.consistencyAnalysis();
 	}
 	
 	public CommentsQualityAnalysis(boolean loadFromFile) {
@@ -180,11 +195,11 @@ public class CommentsQualityAnalysis {
 		try {
 			PrintWriter writer = new PrintWriter(props.getProperty("mysql.data.DataSource.rootPath") + "/" + lxr_type + "_" +props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.lxrNLP"));
 		
-			for (String file_name : ca.getAllCommentedFilepath()) {
-				log.info(file_name);
-				String info = statNLPAnalysis(file_name, lxr_type);
+			for (String path : ca.getAllComments().keySet()) {
+				log.info(path);
+				String info = statNLPAnalysis(path, lxr_type);
 				if(!info.equals(NONE_OF_THIS_TYPE)) {
-					writer.write(file_name + "," + info + "\r\n");
+					writer.write(path + "," + info + "\r\n");
 				}
 			}
 			
@@ -268,7 +283,7 @@ public class CommentsQualityAnalysis {
 				WordSeg wordSeg = new WordSeg();
 				for (Map.Entry<String, String> entry : ca.getAllComments().entrySet()) {
 					String path = entry.getKey();
-					String content = entry.getValue();
+					String content = CommentAnalyzer.COMMON_FILTER.getText(entry.getValue());
 					log.info(content);
 					NLPAnalysisResult result = new NLPAnalysisResult(path);
 					result.setContent_len(content.length());
@@ -311,6 +326,91 @@ public class CommentsQualityAnalysis {
 		
 		return result_set;
 		
+	}
+	
+	protected void prepareAnalysis() {
+		ep = new EvaluationPreparation();
+		algo = new AlgorithmsUtil();
+		evaluation_map = ep.loadJudgeInfoFromDB();
+		
+		//提前加载必要资源，以免多线程加载的时候出问题
+		ca.getAllComments();
+		ca.loadCommentsTypes();
+	}
+	
+	/**
+	 * 获取指定路径全部注释的冗余分析结果
+	 * @param prefix  注释路径的前缀模式
+	 * @return key是lxr类型，value是 冗余数/总数
+	 */
+	public void redundantAnalysis() {
+		prepareAnalysis();
+
+		List<String> all_files = ca.getAllCommentedFilepath();
+		for (String file : all_files) {
+			Thread t = new Thread(new RedundantEvaluationTask(file));
+			t.start();
+		}
+		
+	}
+	
+	/**
+	 * 获取指定路径全部注释的规范性分析结果
+	 * @param prefix  注释路径的前缀模式
+	 * @return key是lxr类型，value是 该类型的规范性平均打分
+	 * 
+	 * 规范性的打分策略是 对每条注释的模板过滤停用词以后计算同文件中同类型注释模板的编辑距离的平均值  
+	 * 规范性打分为： 平均编辑距离 / 模板词长度 
+	 * 规范性打分越大，规范性越差  （注意，现在的实现中，当前注释的提取模板为空的时候，规范性打分设为平均编辑距离）
+	 * 
+	 * 
+	 */
+	public void consistencyAnalysis() {
+		prepareAnalysis();
+		
+		List<String> all_files = ca.getAllCommentedFilepath();
+		for(String file : all_files) {
+			Thread t = new Thread(new ConsistencyEvaluationTask(file));
+			t.start();
+		}
+	}
+	
+	
+	/**
+	 * 对所有注释做词频统计，为取停用词集合做准备
+	 */
+	public void statWordCounter() {
+		Map<String, Integer> word_counter_map = new HashMap<String, Integer>();
+		for(NLPAnalysisResult r : nlpAnalysis("/")) {
+			List<String> words = r.getWord_list();
+			for(String w : words) {
+				if(word_counter_map.containsKey(w)) {
+					word_counter_map.put(w, word_counter_map.get(w) + 1);
+				} else {
+					word_counter_map.put(w, 1);
+				}
+			}
+		}
+		log.setLevel(Level.INFO);
+		log.info("statWordCounter begin");
+		for(Map.Entry<String, Integer> entry: word_counter_map.entrySet()) {
+			String content = entry.getKey().replaceAll("[^\u4e00-\u9fa5]", "").trim();
+			if(!content.equals("")){
+				log.info(entry.getKey().substring(0,entry.getKey().lastIndexOf("/")) + "," + entry.getValue());
+			}
+		}
+		log.info("statWordCounter end");
+	}
+	
+	protected void sampleSubsetForEvaluation() {
+		Map<String, String> all_comments = ca.getAllComments();
+		Random r = new Random();
+		log.setLevel(Level.DEBUG);
+		for(String path: all_comments.keySet()) {
+			if(r.nextInt(20) == 1) {
+				log.debug(path);
+			}
+		}
 	}
 	
 	public int validityRedundantComment(String type) throws IOException{
@@ -710,6 +810,70 @@ public class CommentsQualityAnalysis {
 	public static double computeEnglishRatio(String inputStr){
 		String str = inputStr.replaceAll("[\u4e00-\u9fa5]", "");
 		return (double)str.length()/inputStr.length();
+	}
+	
+	//每个task负责一个源码文件，这样多个文件就可以并行的做，提高效率
+	class ConsistencyEvaluationTask implements Runnable {
+		
+		private String path_file;
+		
+		public ConsistencyEvaluationTask(String path_file) {
+			this.path_file = path_file;
+		}
+
+		@Override
+		public void run() {
+			for(String path : evaluation_map.keySet()) {
+				if(path.startsWith(path_file)){
+					JudgeTableInfo jti = evaluation_map.get(path);
+					Set<String> same_file_comments = ca.getFileCommentsWithPath(path, ca.loadCommentsTypes().get(path)).keySet();
+					int total_edit_distance = 0;
+					List<String> cur_template = ca.loadNewTemplate(path, CommentAnalyzer.TEMPLATE_SAME_TYPE);
+					for(String other_path : same_file_comments) {
+						List<String> other_template = ca.loadNewTemplate(other_path, CommentAnalyzer.TEMPLATE_SAME_TYPE);
+						total_edit_distance += algo.editDistance(cur_template, other_template);
+					}
+					double avg_edit_distance = (double)(total_edit_distance)/same_file_comments.size();
+					double consistency_score = avg_edit_distance;
+					if(cur_template.size() != 0) {
+						consistency_score /= cur_template.size();
+					}
+					//为了适应consistency_score的整数保存方式，将double型的分数 * 100然后取整
+					jti.setConsistency_score((int)(consistency_score * 100));
+					ep.updateJudgeInfo(jti);
+				}
+			}
+		}
+		
+	}
+	
+	class RedundantEvaluationTask implements Runnable {
+		
+		private String path_file;
+		
+		public RedundantEvaluationTask(String path_file) {
+			this.path_file = path_file;
+		}
+
+		@Override
+		public void run() {
+			//这里为了避免代码冗余，采用了一种偷懒的方式，直接取的模板着色以后的字符串，然后通过正则表达式的 最短匹配(.*?)，去掉着色串，如果剩下的没有中文串了，就认为是冗余的
+			for(String path : evaluation_map.keySet()) {
+				if(path.startsWith(path_file)){
+					JudgeTableInfo jti = evaluation_map.get(path);
+					String color_info = ca.getColoredInfo(path, CommentAnalyzer.TEMPLATE_SAME_TYPE);
+					color_info = WordSeg.SEG_FILTER.getText(color_info.replaceAll("<b><font color = (.*?)</font></b>", ""));
+					if(color_info.replaceAll("[^\u4e00-\u9fa5]", "").equals("")) {
+						log.info("redundant " + path);
+						jti.setIs_redundant(1);
+					} else {
+						jti.setIs_redundant(0);
+					}
+					ep.updateJudgeInfo(jti);
+				}
+			}
+		}
+		
 	}
 	
 }

@@ -13,43 +13,16 @@ import java.util.Set;
 import org.apache.log4j.Logger;
 
 import mysql.data.analysisDB.entity.JudgeTableInfo;
+import mysql.data.util.ConnectionUtil;
 import mysql.data.util.PropertiesUtil;
 
 public class EvaluationPreparation {
 	private static Logger logger = Logger
 			.getLogger(EvaluationPreparation.class);
 	private Connection conn;
-	private Properties props;
 
 	public EvaluationPreparation() {
-		props = PropertiesUtil.getProperties();
-		StringBuilder url = new StringBuilder();
-		url.append("jdbc:mysql://")
-				.append(props.getProperty("mysql.data.DataSource.dbserver.ip",
-						"192.168.160.131"))
-				.append(":")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.port", "3306"))
-				.append("/")
-				.append(props.getProperty(
-						"mysql.data.gui.EvaluationPreparation.judgedb",
-						"pkuJudge"))
-				.append("?user=")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.user", "root"))
-				.append("&password=")
-				.append(props.getProperty(
-						"mysql.data.DataSource.dbserver.pass", "123123"));
-
-		try {
-			Class.forName("com.mysql.jdbc.Driver");
-			this.conn = DriverManager.getConnection(url.toString());
-
-		} catch (ClassNotFoundException e) {
-			e.printStackTrace();
-		} catch (SQLException e) {
-			e.printStackTrace();
-		}
+		conn = ConnectionUtil.getJudgeConnection();
 	}
 
 	public Connection getConn() {
@@ -70,18 +43,41 @@ public class EvaluationPreparation {
 		return true;
 	}
 	
-	public Map<String, JudgeTableInfo> loadJudgeInfoFromDB() throws SQLException {
+	public Map<String, JudgeTableInfo> loadJudgeInfoFromDB(){
 		Map<String, JudgeTableInfo> judgeList = new HashMap<String, JudgeTableInfo>();
-		Statement stmt = conn.createStatement();
-		ResultSet rs = stmt.executeQuery("select * from judge;");
-		while(rs.next()) {
-			JudgeTableInfo ins = new JudgeTableInfo();
-			ins.format(rs);
-			judgeList.put(ins.getComment_path(),ins);
+		try {
+			Statement stmt = conn.createStatement();
+
+			ResultSet rs = stmt.executeQuery("select * from judge;");
+			while (rs.next()) {
+				JudgeTableInfo ins = new JudgeTableInfo();
+				ins.format(rs);
+				judgeList.put(ins.getComment_path(), ins);
+			}
+			rs.close();
+			stmt.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
 		}
-		rs.close();
-		stmt.close();
 		return judgeList;
+	}
+	
+	public JudgeTableInfo getJudgeInfo(String path) {
+		JudgeTableInfo ins = new JudgeTableInfo();
+		
+		try {
+			Statement stmt = conn.createStatement();
+			ResultSet rs = stmt.executeQuery("select * from judge where comment_path='" + path + "';");
+			if(rs.next()) {
+				ins.format(rs);
+			}
+			rs.close();
+			stmt.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+		return ins;
 	}
 
 	public void insertAllPathToJudgeDB(Set<String> paths) throws SQLException {
@@ -99,41 +95,39 @@ public class EvaluationPreparation {
 
 	}
 	
-	public void updateJudgeInfo(JudgeTableInfo jti) throws SQLException {
-		Statement stmt = conn.createStatement();
-		StringBuilder sql = new StringBuilder();
-		sql.append("update judge ")
-			.append("set validation_state=")
-			.append(jti.getValidation_state())
-			.append(",")
-			.append("completeness_score=")
-			.append(jti.getCompleteness_score())
-			.append(",")
-			.append("consistency_score=")
-			.append(jti.getConsistency_score())
-			.append(",")
-			.append("information_score=")
-			.append(jti.getInformation_score())
-			.append(",")
-			.append("readability_score=")
-			.append(jti.getReadability_score())
-			.append(",")
-			.append("objectivity_score=")
-			.append(jti.getObjectivity_score())
-			.append(",")
-			.append("verifiability_score=")
-			.append(jti.getVerifiability_score())
-			.append(",")
-			.append("relativity_score=")
-			.append(jti.getRelativity_score())
-			.append(" where comment_path='")
-			.append(jti.getComment_path())
-			.append("';");
+	public void updateJudgeInfo(JudgeTableInfo jti){
+		try {
+			Statement stmt = conn.createStatement();
 		
-		stmt.executeUpdate(sql.toString());
-		
-		logger.info("update " + jti.getComment_path());
-		stmt.close();
+			StringBuilder sql = new StringBuilder();
+			sql.append("update judge ").append("set validation_state=")
+					.append(jti.getValidation_state()).append(",")
+					.append("is_redundant=")
+					.append(jti.getIs_redundant()).append(",")
+					.append("completeness_score=")
+					.append(jti.getCompleteness_score()).append(",")
+					.append("consistency_score=")
+					.append(jti.getConsistency_score()).append(",")
+					.append("information_score=")
+					.append(jti.getInformation_score()).append(",")
+					.append("readability_score=")
+					.append(jti.getReadability_score()).append(",")
+					.append("objectivity_score=")
+					.append(jti.getObjectivity_score()).append(",")
+					.append("verifiability_score=")
+					.append(jti.getVerifiability_score()).append(",")
+					.append("relativity_score=")
+					.append(jti.getRelativity_score())
+					.append(" where comment_path='")
+					.append(jti.getComment_path()).append("';");
+
+			stmt.executeUpdate(sql.toString());
+
+			logger.info("update " + jti.getComment_path());
+			stmt.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
 		
 	}
 

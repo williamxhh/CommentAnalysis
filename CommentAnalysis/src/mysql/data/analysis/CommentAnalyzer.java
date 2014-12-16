@@ -78,6 +78,7 @@ public class CommentAnalyzer {
 	private boolean loadFromFile;
 
 	public CommentAnalyzer(boolean loadFromFile) {
+		logger.setLevel(Level.WARN);
 		this.loadFromFile = loadFromFile;
 		props = PropertiesUtil.getProperties();
 		StringBuilder sourceurl = new StringBuilder();
@@ -337,8 +338,6 @@ public class CommentAnalyzer {
 
 			word_seg.exit();
 
-		} catch (SQLException | IOException e) {
-			e.printStackTrace();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -470,8 +469,6 @@ public class CommentAnalyzer {
 				logger.info("#finish" + "\t" + path);
 				result.put(path, longest_template);
 			}
-		} catch (SQLException | IOException e) {
-			e.printStackTrace();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -1042,7 +1039,7 @@ public class CommentAnalyzer {
 	 * @throws SQLException
 	 */
 	public Map<String, String> getFileCommentsWithPath(String input_path,
-			String lxrType) throws IOException, SQLException {
+			String lxrType){
 		String filename = getCommentFileName(input_path);
 		Map<String, String> c = new TreeMap<String, String>();
 		allComments = getAllComments();
@@ -1115,6 +1112,11 @@ public class CommentAnalyzer {
 		return type_and_comments_count;
 	}
 
+	/**
+	 * 获得所有已注释的lxr类型
+	 * @return
+	 * @throws SQLException
+	 */
 	public List<String> getAllCommentedLxrtypes() throws SQLException {
 		List<String> lxrtypes = new ArrayList<String>();
 		Statement stmt = this.storage_conn.createStatement();

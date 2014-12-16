@@ -1,11 +1,23 @@
 package mysql.data.algorithms;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
+
+import mysql.data.util.PropertiesUtil;
 
 public class AlgorithmsUtil {
 	
-	public int editDistance(List<String> l1, List<String> l2) {
+	private Set<String> stopWordsSet = null;
+	
+	public int editDistance(List<String> template1, List<String> template2) {
+		List<String> l1 = removeStopWords(template1);
+		List<String> l2 = removeStopWords(template2);
+		
 		int len1 = l1.size();
 		int len2 = l2.size();
 		
@@ -32,6 +44,34 @@ public class AlgorithmsUtil {
 		}
 		
 		return distance[len1][len2];
+	}
+	
+	protected List<String> removeStopWords(List<String> origin) {
+		List<String> result = new ArrayList<String>();
+		stopWordsSet = loadStopWords();
+		for(String word : origin) {
+			if(!stopWordsSet.contains(word) && !word.replaceAll("[^\u4e00-\u9fa5]", "").equals("")) {
+				result.add(word);
+			}
+		}
+		return result;
+	}
+	
+	protected Set<String> loadStopWords() {
+		if(stopWordsSet == null) {
+			stopWordsSet = new HashSet<String>();
+			try {
+				BufferedReader reader = new BufferedReader(new FileReader(PropertiesUtil.getProperties().getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.stopWords")));
+				String line = "";
+				while((line = reader.readLine()) != null) {
+					stopWordsSet.add(line.trim());
+				}
+				reader.close();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		}
+		return stopWordsSet;
 	}
 	
 	public List<String> longestCommonString(List<String> l1, List<String> l2) {

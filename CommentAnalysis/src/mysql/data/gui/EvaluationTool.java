@@ -288,26 +288,7 @@ public class EvaluationTool extends JFrame {
 	}
 
 	private void loadCommentsTypes() {
-		try {
-			comment_types = new HashMap<String, String>();
-			BufferedReader reader = new BufferedReader(new FileReader(
-					PropertiesUtil.getProperties().getProperty(
-							"mysql.data.CommentClassifier.commentsAndTypes")));
-			String oneline = "";
-			while ((oneline = reader.readLine()) != null) {
-				String[] splits = oneline.split(",");
-				if (splits.length == 2)
-					comment_types.put(splits[0].trim(), splits[1].trim());
-				else
-					comment_types.put(splits[0].trim(),
-							oneline.substring(splits[0].length() + 1));
-			}
-			reader.close();
-		} catch (FileNotFoundException e) {
-			e.printStackTrace();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		comment_types = ca.loadCommentsTypes();
 	}
 
 	private void initComponents() {
@@ -1515,11 +1496,15 @@ public class EvaluationTool extends JFrame {
 		jti.setRelativity_score(Integer.parseInt(relativity_score_text_field
 				.getText()));
 
-		try {
-			ep.updateJudgeInfo(jti);
-		} catch (SQLException e) {
-			e.printStackTrace();
+		ep.updateJudgeInfo(jti);
+		
+		int state = 0;
+		if(judge_type_judged_radio_btn.isSelected()) {
+			state = 1;
 		}
+		String comment_type = judge_comment_type_combo_box.getSelectedItem().toString();
+		updateCommentPathList(state, comment_type, false);
+		comment_path_list.setSelectedIndex(0);
 	}
 
 	private void jRadioButtonActionActionPerformed(ActionEvent event) {

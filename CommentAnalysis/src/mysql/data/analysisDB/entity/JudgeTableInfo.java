@@ -6,7 +6,8 @@ import java.sql.SQLException;
 public class JudgeTableInfo implements Comparable<JudgeTableInfo>{
 	private String comment_path;
 	private int validation_state;
-	private int validation_content;
+	private int is_redundant;
+	private String validation_content;
 	private int completeness_score;
 	private int consistency_score;
 	private int information_score;
@@ -27,10 +28,16 @@ public class JudgeTableInfo implements Comparable<JudgeTableInfo>{
 	public void setValidation_state(int validation_state) {
 		this.validation_state = validation_state;
 	}
-	public int getValidation_content() {
+	public int getIs_redundant() {
+		return is_redundant;
+	}
+	public void setIs_redundant(int is_redundant) {
+		this.is_redundant = is_redundant;
+	}
+	public String getValidation_content() {
 		return validation_content;
 	}
-	public void setValidation_content(int validation_content) {
+	public void setValidation_content(String validation_content) {
 		this.validation_content = validation_content;
 	}
 	public int getCompleteness_score() {
@@ -79,14 +86,15 @@ public class JudgeTableInfo implements Comparable<JudgeTableInfo>{
 	public void format(ResultSet rs) throws SQLException{
 		this.setComment_path(rs.getString(1));
 		this.setValidation_state(rs.getInt(2));
-		this.setValidation_content(rs.getInt(3));
-		this.setCompleteness_score(rs.getInt(4));
-		this.setConsistency_score(rs.getInt(5));
-		this.setInformation_score(rs.getInt(6));
-		this.setReadability_score(rs.getInt(7));
-		this.setObjectivity_score(rs.getInt(8));
-		this.setVerifiability_score(rs.getInt(9));
-		this.setRelativity_score(rs.getInt(10));
+		this.setIs_redundant(rs.getInt(3));
+		this.setValidation_content(rs.getString(4));
+		this.setCompleteness_score(rs.getInt(5));
+		this.setConsistency_score(rs.getInt(6));
+		this.setInformation_score(rs.getInt(7));
+		this.setReadability_score(rs.getInt(8));
+		this.setObjectivity_score(rs.getInt(9));
+		this.setVerifiability_score(rs.getInt(10));
+		this.setRelativity_score(rs.getInt(11));
 	}
 	@Override
 	public int compareTo(JudgeTableInfo o) {
