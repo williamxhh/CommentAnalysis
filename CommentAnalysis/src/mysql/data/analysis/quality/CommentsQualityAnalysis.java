@@ -145,8 +145,7 @@ public class CommentsQualityAnalysis {
 	 * @throws IOException
 	 * @throws ClassNotFoundException
 	 */
-	public Map<String, String> statCommentedRatio(String prefix)
-			throws SQLException, IOException, ClassNotFoundException {
+	public Map<String, String> statCommentedRatio(String prefix){
 		Map<String, Integer> commented_count = new TreeMap<String, Integer>();
 		Map<String, Integer> total_count = new TreeMap<String, Integer>();
 		Set<String> file_set = new TreeSet<String>();
@@ -376,7 +375,6 @@ public class CommentsQualityAnalysis {
 			Thread t = new Thread(new RedundantEvaluationTask(file));
 			t.start();
 		}
-
 	}
 
 	/**
@@ -741,9 +739,7 @@ public class CommentsQualityAnalysis {
 	 * @throws ClassNotFoundException
 	 * @throws IOException
 	 */
-	public Map<String, Integer> getAllEntries(String filePath)
-			throws SQLException, FileNotFoundException, ClassNotFoundException,
-			IOException {
+	public Map<String, Integer> getAllEntries(String filePath) {
 		if (entry_map == null) {
 			entry_map = getAllEntries();
 		}
@@ -765,44 +761,50 @@ public class CommentsQualityAnalysis {
 	 * @throws IOException
 	 * @throws ClassNotFoundException
 	 */
-	public Map<String, CommentEntryCount> getAllEntries() throws SQLException,
-			FileNotFoundException, IOException, ClassNotFoundException {
-		File all_entries_file = new File(
-				props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.allEntries"));
-		if (all_entries_file.exists()) {
-			ObjectInputStream ois = new ObjectInputStream(new FileInputStream(
-					all_entries_file));
-			entry_map = (Map<String, CommentEntryCount>) ois.readObject();
-			ois.close();
-		} else {
-			entry_map = new HashMap<String, CommentEntryCount>();
-			Statement stmt = ConnectionUtil.getLxrConnection().createStatement();
-			String sql = "select f.filename, d.declaration, count(*) as number from lxr_files f, lxr_declarations d, lxr_indexes i "
-					+ "where f.fileid=i.fileid and i.type=d.declid and d.declaration != 'local variable' and f.fileid in (select r.fileid from "
-					+ "lxr_releases r where r.releaseid='linux-3.5.4') GROUP BY f.filename, d.declaration;";
-			ResultSet rs = stmt.executeQuery(sql);
-			while (rs.next()) {
-				String path = rs.getString(1);
-				String type = rs.getString(2);
-				int count = rs.getInt(3);
-				CommentEntryCount entry = null;
-				if (entry_map.containsKey(path)) {
-					entry = entry_map.get(path);
-				} else {
-					entry = new CommentEntryCount(path);
-					entry_map.put(path, entry);
+	public Map<String, CommentEntryCount> getAllEntries(){
+		try{
+			File all_entries_file = new File(
+					props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.allEntries"));
+			if (all_entries_file.exists()) {
+				ObjectInputStream ois = new ObjectInputStream(new FileInputStream(
+						all_entries_file));
+				entry_map = (Map<String, CommentEntryCount>) ois.readObject();
+				ois.close();
+			} else {
+				entry_map = new HashMap<String, CommentEntryCount>();
+				Statement stmt = ConnectionUtil.getLxrConnection().createStatement();
+				String sql = "select f.filename, d.declaration, count(*) as number from lxr_files f, lxr_declarations d, lxr_indexes i "
+						+ "where f.fileid=i.fileid and i.type=d.declid and d.declaration != 'local variable' and f.fileid in (select r.fileid from "
+						+ "lxr_releases r where r.releaseid='linux-3.5.4') GROUP BY f.filename, d.declaration;";
+				ResultSet rs = stmt.executeQuery(sql);
+				while (rs.next()) {
+					String path = rs.getString(1);
+					String type = rs.getString(2);
+					int count = rs.getInt(3);
+					CommentEntryCount entry = null;
+					if (entry_map.containsKey(path)) {
+						entry = entry_map.get(path);
+					} else {
+						entry = new CommentEntryCount(path);
+						entry_map.put(path, entry);
+					}
+					entry.addType(type, count);
 				}
-				entry.addType(type, count);
-			}
-			rs.close();
-			stmt.close();
+				rs.close();
+				stmt.close();
 
-			ObjectOutputStream oos = new ObjectOutputStream(
-					new FileOutputStream(all_entries_file));
-			oos.writeObject(entry_map);
-			oos.flush();
-			oos.close();
+				ObjectOutputStream oos = new ObjectOutputStream(
+						new FileOutputStream(all_entries_file));
+				oos.writeObject(entry_map);
+				oos.flush();
+				oos.close();
+			}
+		} catch (IOException | SQLException e){
+			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
+			e.printStackTrace();
 		}
+		
 
 		return entry_map;
 

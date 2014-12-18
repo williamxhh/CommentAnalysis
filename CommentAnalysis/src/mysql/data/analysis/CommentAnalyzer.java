@@ -720,15 +720,11 @@ public class CommentAnalyzer {
 	public Map<String, String> filterPath(Map<String, String> input) {
 		CommentsQualityAnalysis cqa = new CommentsQualityAnalysis(true);
 		Map<String, String> result = new TreeMap<String, String>();
-		try {
-			Set<String> valid_file_set = cqa.getAllEntries().keySet();
-			for (String path : input.keySet()) {
-				if (valid_file_set.contains(getCommentFileName(path))) {
-					result.put(path, input.get(path));
-				}
+		Set<String> valid_file_set = cqa.getAllEntries().keySet();
+		for (String path : input.keySet()) {
+			if (valid_file_set.contains(getCommentFileName(path))) {
+				result.put(path, input.get(path));
 			}
-		} catch (ClassNotFoundException | SQLException | IOException e) {
-			e.printStackTrace();
 		}
 
 		return result;
