@@ -26,6 +26,8 @@ import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
@@ -53,7 +55,6 @@ import mysql.data.util.PropertiesUtil;
 public class CommentsQualityAnalysis {
 	private static final Logger log = Logger
 			.getLogger(CommentsQualityAnalysis.class);
-	private static Properties props = PropertiesUtil.getProperties();
 	private static String NONE_OF_THIS_TYPE = "None of This Type";
 
 	private CommentAnalyzer ca = null;
@@ -63,6 +64,7 @@ public class CommentsQualityAnalysis {
 	// 评估规范性的时候使用
 	private EvaluationPreparation ep = null;;
 	private AlgorithmsUtil algo = null;
+	private WordSeg wordSeg = null;
 	// 保存从judge数据库中读入的结果，key是path，value是评分结果
 	private Map<String, JudgeTableInfo> evaluation_map = null;;
 
@@ -84,11 +86,11 @@ public class CommentsQualityAnalysis {
 		// cqa.completenessCommentedTypeRatio();
 		// cqa.completenessFileCommentedRatio(type);
 
-		String path = "/";
+//		String path = "/";  
 		// String type = "function definition";
 		// String type = "variable definition";
 		// String type = "macro (un)definition";
-		String type = "class, struct, or union member";
+//		String type = "class, struct, or union member";
 		// cqa.statCommentTypeDistribution(path);
 		// cqa.statCommentedRatio(path);
 		// cqa.statNLPAnalysis(path,type);
@@ -97,8 +99,9 @@ public class CommentsQualityAnalysis {
 		// cqa.statWordCounter();
 		// cqa.sampleSubsetForEvaluation();
 		// cqa.completeness(type);
-		// cqa.redundantAnalysis();
-		// cqa.consistencyAnalysis();
+//		cqa.redundantAnalysis();
+//		cqa.consistencyAnalysis();
+//		cqa.imageAndUrlCountAnalysis();
 	}
 
 	public CommentsQualityAnalysis(boolean loadFromFile) {
@@ -202,11 +205,11 @@ public class CommentsQualityAnalysis {
 		log.setLevel(Level.INFO);
 		try {
 			PrintWriter writer = new PrintWriter(
-					props.getProperty("mysql.data.DataSource.rootPath")
+					PropertiesUtil.getProperty("mysql.data.DataSource.rootPath")
 							+ "/"
 							+ lxr_type
 							+ "_"
-							+ props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.lxrNLP"));
+							+ PropertiesUtil.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.lxrNLP"));
 
 			for (String path : ca.getAllComments().keySet()) {
 				log.info(path);
@@ -281,7 +284,7 @@ public class CommentsQualityAnalysis {
 
 		if (nlp_result_map == null) {
 			File nlp_file = new File(
-					props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.nlpResult"));
+					PropertiesUtil.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.nlpResult"));
 			if (nlp_file.exists()) {
 				log.debug("load from file");
 				try {
@@ -353,6 +356,7 @@ public class CommentsQualityAnalysis {
 	protected void prepareAnalysis() {
 		ep = new EvaluationPreparation();
 		algo = new AlgorithmsUtil();
+		wordSeg = new WordSeg();
 		evaluation_map = ep.loadJudgeInfoFromDB();
 
 		// 提前加载必要资源，以免多线程加载的时候出问题
@@ -363,9 +367,6 @@ public class CommentsQualityAnalysis {
 	/**
 	 * 获取指定路径全部注释的冗余分析结果
 	 * 
-	 * @param prefix
-	 *            注释路径的前缀模式
-	 * @return key是lxr类型，value是 冗余数/总数
 	 */
 	public void redundantAnalysis() {
 		prepareAnalysis();
@@ -375,14 +376,11 @@ public class CommentsQualityAnalysis {
 			Thread t = new Thread(new RedundantEvaluationTask(file));
 			t.start();
 		}
+		
 	}
 
 	/**
 	 * 获取指定路径全部注释的规范性分析结果
-	 * 
-	 * @param prefix
-	 *            注释路径的前缀模式
-	 * @return key是lxr类型，value是 该类型的规范性平均打分
 	 * 
 	 *         规范性的打分策略是 对每条注释的模板过滤停用词以后计算同文件中同类型注释模板的编辑距离的平均值 规范性打分为： 平均编辑距离 /
 	 *         模板词长度 规范性打分越大，规范性越差 （注意，现在的实现中，当前注释的提取模板为空的时候，规范性打分设为平均编辑距离）
@@ -397,6 +395,33 @@ public class CommentsQualityAnalysis {
 			Thread t = new Thread(new ConsistencyEvaluationTask(file));
 			t.start();
 		}
+		
+	}
+	
+	/**
+	 * 获取指定路径全部注释的图片和url统计结果
+	 * 
+	 */
+	public void imageAndUrlCountAnalysis() {
+		prepareAnalysis();
+
+		List<String> all_files = ca.getAllCommentedFilepath();
+		for (String file : all_files) {
+			Thread t = new Thread(new ImageAndUrlCountTask(file));
+			t.start();
+		}
+	}
+	
+	
+	public List<String> getConsistencyTemplate(String comment_content) {
+		List<String> result = new ArrayList<String>();
+		Set<String> reservedWords = algo.loadReservedTemplateWords();
+		for(String word : wordSeg.segmentation(comment_content, WordSeg.NO_POS_TAG, WordSeg.SEG_FILTER)) {
+			if(reservedWords.contains(word)) {
+				result.add(word);
+			}
+		}
+		return result;
 	}
 
 	/**
@@ -491,7 +516,7 @@ public class CommentsQualityAnalysis {
 	 * @throws IOException
 	 */
 	public void validityPasteOriginSourceCode(String type) throws IOException {
-		String SourceCodePath = props.getProperty("linuxSource.dir");
+		String SourceCodePath = PropertiesUtil.getProperty("linuxSource.dir");
 
 		Map<String, String> comments = TXTCommentAnalyzer.readContentToMap(
 				FileUtil.readableFile(TXTCommentAnalyzer.DEFAULTPATH
@@ -656,13 +681,13 @@ public class CommentsQualityAnalysis {
 	 */
 	public void completenessCommentedTypeRatio() throws IOException,
 			SQLException, ClassNotFoundException {
-		String spliter = props
+		String spliter = PropertiesUtil
 				.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter");
 		List<FileCommentTypeCount> commented = loadCommentedEntryFromDB();
 		Map<String, Integer> fileAllEntries = null;
 		PrintWriter writer = new PrintWriter(
 				new FileWriter(
-						props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.commentsTypesRatio")));
+						PropertiesUtil.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.commentsTypesRatio")));
 		String commentedFilePath = "";
 		for (FileCommentTypeCount fileCommentType : commented) {
 			if (commentedFilePath.equals("")) {
@@ -702,7 +727,7 @@ public class CommentsQualityAnalysis {
 		Map<String, String> typeRatioMap = TXTCommentAnalyzer
 				.readContentToMap(
 						new File(
-								props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.commentsTypesRatio")),
+								PropertiesUtil.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.commentsTypesRatio")),
 						TXTCommentAnalyzer.DEFAULTSPLITER);
 		PrintWriter writer = new PrintWriter(
 				FileUtil.writeableFile(TXTCommentAnalyzer.DEFAULTPATH
@@ -764,7 +789,7 @@ public class CommentsQualityAnalysis {
 	public Map<String, CommentEntryCount> getAllEntries(){
 		try{
 			File all_entries_file = new File(
-					props.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.allEntries"));
+					PropertiesUtil.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.allEntries"));
 			if (all_entries_file.exists()) {
 				ObjectInputStream ois = new ObjectInputStream(new FileInputStream(
 						all_entries_file));
@@ -914,22 +939,19 @@ public class CommentsQualityAnalysis {
 							.getFileCommentsWithPath(path,
 									ca.loadCommentsTypes().get(path)).keySet();
 					int total_edit_distance = 0;
-					List<String> cur_template = ca.loadNewTemplate(path,
-							CommentAnalyzer.TEMPLATE_SAME_TYPE);
+					List<String> cur_template = getConsistencyTemplate(ca.getAllComments().get(path));
 					for (String other_path : same_file_comments) {
-						List<String> other_template = ca.loadNewTemplate(
-								other_path, CommentAnalyzer.TEMPLATE_SAME_TYPE);
+						List<String> other_template = getConsistencyTemplate(ca.getAllComments().get(other_path));
 						total_edit_distance += algo.editDistance(cur_template,
 								other_template);
 					}
-					double avg_edit_distance = (double) (total_edit_distance)
-							/ same_file_comments.size();
+					double avg_edit_distance = (double) (total_edit_distance) / same_file_comments.size();
 					double consistency_score = avg_edit_distance;
 					if (cur_template.size() != 0) {
 						consistency_score /= cur_template.size();
 					}
 					// 为了适应consistency_score的整数保存方式，将double型的分数 * 100然后取整
-					jti.setConsistency_score((int) (consistency_score * 100));
+					jti.setConsistency_score(consistency_score);
 					ep.updateJudgeInfo(jti);
 				}
 			}
@@ -953,7 +975,7 @@ public class CommentsQualityAnalysis {
 				if (path.startsWith(path_file)) {
 					JudgeTableInfo jti = evaluation_map.get(path);
 					String color_info = ca.getColoredInfo(path,
-							CommentAnalyzer.TEMPLATE_SAME_TYPE);
+							CommentAnalyzer.TEMPLATE_SAME_TYPE, false);
 					color_info = WordSeg.SEG_FILTER
 							.getText(color_info.replaceAll(
 									"<b><font color = (.*?)</font></b>", ""));
@@ -968,7 +990,57 @@ public class CommentsQualityAnalysis {
 				}
 			}
 		}
+	}
+	
+	class ImageAndUrlCountTask implements Runnable {
 
+		private String path_file;
+		Pattern image_pattern1;
+		Pattern image_pattern2;
+		Pattern url_pattern;
+
+		public ImageAndUrlCountTask(String path_file) {
+			this.path_file = path_file;
+			String regex = "\\[\\[File[:|：](.*?)[jpg|png]\\]\\]";
+			image_pattern1 = Pattern.compile(regex);
+			
+			regex = "\\{\\{#tag:imagemap(.*?)\\}\\}";
+			image_pattern2 = Pattern.compile(regex);
+			
+			regex = "\\[http://[^\\]]+\\]";
+			url_pattern = Pattern.compile(regex);
+		}
+
+		@Override
+		public void run() {
+			for (String path : evaluation_map.keySet()) {
+				if (path.startsWith(path_file)) {
+					JudgeTableInfo jti = evaluation_map.get(path);
+					int image_count = 0;
+					int url_count = 0;
+					String comments = ca.getAllComments().get(path);
+					
+					Matcher matcher = image_pattern1.matcher(comments);
+					while(matcher.find()) {
+						++image_count;
+					}
+					
+					matcher = image_pattern2.matcher(comments);
+					while(matcher.find()) {
+						++image_count;
+					}
+					
+					matcher = url_pattern.matcher(comments);
+					while(matcher.find()) {
+						++url_count;
+					}
+					
+					jti.setImage_count(image_count);
+					jti.setUrl_count(url_count);
+					ep.updateJudgeInfo(jti);
+				}
+			}
+		}
 	}
 
 }

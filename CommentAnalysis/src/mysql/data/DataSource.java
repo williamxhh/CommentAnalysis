@@ -10,11 +10,9 @@ import java.io.PrintWriter;
 import java.nio.charset.Charset;
 import java.sql.Blob;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.Properties;
 
 import org.apache.log4j.Logger;
 
@@ -23,7 +21,6 @@ import mysql.data.util.PropertiesUtil;
 
 public class DataSource {
 	private static final Logger log = Logger.getLogger(DataSource.class);
-	private Properties props = new Properties();
 	private String rootPath;
 	//包含所有已注释的函数，宏，变量的路径的文件
 	private String pathFile;
@@ -43,11 +40,9 @@ public class DataSource {
 	}
 	
 	public DataSource(){
-		props = PropertiesUtil.getProperties();
-		
-		rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
-		pathFile = props.getProperty("mysql.data.DataSource.pathFile","path.txt");
-		allCommentsFile = props.getProperty("mysql.data.DataSource.allCommentsFile","allComments.txt");
+		rootPath = PropertiesUtil.getProperty("mysql.data.DataSource.rootPath","commentData/");
+		pathFile = PropertiesUtil.getProperty("mysql.data.DataSource.pathFile","path.txt");
+		allCommentsFile = PropertiesUtil.getProperty("mysql.data.DataSource.allCommentsFile","allComments.txt");
 		
 	}
 	

@@ -95,4 +95,12 @@ public class ObjectiveViewQuality {
 		return Double.parseDouble(String.format("%.2f",avg_len));
 	}
 	
+	public int getImageCount(String type) {
+		return info_map.get(type).getImage_count();
+	}
+	
+	public int getUrlCount(String type) {
+		return info_map.get(type).getUrl_count();
+	}
+	
 }

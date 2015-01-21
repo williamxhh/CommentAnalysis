@@ -39,7 +39,7 @@ public class PathAnalyzer {
 //		writer.close();
 		
 		//查看三家单位的公共注释path的注释内容
-		String spliter = PropertiesUtil.getProperties().getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter");
+		String spliter = PropertiesUtil.getProperty("mysql.data.analysis.TXTCommentAnalyzer.commentSpliter");
 		Map<String, String> pkuComment = TXTCommentAnalyzer.readContentToMap(FileUtil.readableFile("commentData_012pku/filteredComment_012pku.txt"), spliter);
 		Map<String, String> qinghuaComment = TXTCommentAnalyzer.readContentToMap(FileUtil.readableFile("commentData_013qinghua/filteredComment_013qinghua.txt"), spliter);
 		Map<String, String> iscasComment = TXTCommentAnalyzer.readContentToMap(FileUtil.readableFile("commentData_023iscas/filteredComment_023iscas.txt"), spliter);

@@ -108,7 +108,11 @@ public class EvaluationPreparation {
 					.append("verifiability_score=")
 					.append(jti.getVerifiability_score()).append(",")
 					.append("relativity_score=")
-					.append(jti.getRelativity_score())
+					.append(jti.getRelativity_score()).append(",")
+					.append("image_count=")
+					.append(jti.getImage_count()).append(",")
+					.append("url_count=")
+					.append(jti.getUrl_count())
 					.append(" where comment_path='")
 					.append(jti.getComment_path()).append("';");
 

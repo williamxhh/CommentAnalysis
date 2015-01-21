@@ -5,7 +5,6 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.Properties;
 
 import mysql.data.filter.CategoryTagFilter;
 import mysql.data.filter.DoNothingFilter;
@@ -14,14 +13,12 @@ import mysql.data.filter.HtmlFilter;
 import mysql.data.util.PropertiesUtil;
 
 public class DataClean {
-	static Properties props ;
-	
 	
 	public static void main(String[] args) {
 		try {
 			filterComment();
 		} catch (IOException e) {
-			e.printStackTrace();
+			e.printStackTrace();	
 		}
 		System.out.println("DataClean done");
 	}
@@ -38,10 +35,9 @@ public class DataClean {
 	 * @throws IOException 
 	 */
 	static void filterComment(FilterBase filter) throws IOException{
-		props = PropertiesUtil.getProperties();
-		String rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
-		String allCommentsFile = props.getProperty("mysql.data.DataSource.allCommentsFile","allComments.txt");
-		String filteredCommentsFile = props.getProperty("mysql.data.DataClean.filteredCommentsFile","filteredComment.txt");
+		String rootPath = PropertiesUtil.getProperty("mysql.data.DataSource.rootPath","commentData/");
+		String allCommentsFile = PropertiesUtil.getProperty("mysql.data.DataSource.allCommentsFile","allComments.txt");
+		String filteredCommentsFile = PropertiesUtil.getProperty("mysql.data.DataClean.filteredCommentsFile","filteredComment.txt");
 		try {
 //			BufferedReader reader = new BufferedReader(new FileReader(rootPath+"/allComments.txt"));
 //			PrintWriter writer = new PrintWriter(rootPath+"/filteredComment.txt");

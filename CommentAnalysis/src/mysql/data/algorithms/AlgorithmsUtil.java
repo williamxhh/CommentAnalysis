@@ -46,22 +46,53 @@ public class AlgorithmsUtil {
 		return distance[len1][len2];
 	}
 	
-	protected List<String> removeStopWords(List<String> origin) {
+	public List<String> removeStopWords(List<String> origin) {
 		List<String> result = new ArrayList<String>();
-		stopWordsSet = loadStopWords();
+//		stopWordsSet = loadStopWords();
+//		for(String word : origin) {
+//			if(!stopWordsSet.contains(word) && !word.replaceAll("[^\u4e00-\u9fa5]", "").equals("")) {
+//				result.add(word);
+//			}
+//		}
+		
+		Set<String> reservedWords = loadReservedTemplateWords();
 		for(String word : origin) {
-			if(!stopWordsSet.contains(word) && !word.replaceAll("[^\u4e00-\u9fa5]", "").equals("")) {
+			if(reservedWords.contains(word)) {
 				result.add(word);
 			}
 		}
 		return result;
 	}
 	
+	//加载配置的模板词候选项，将用最长公共子序列提取的模板中非模板候选项的词去掉
+	public Set<String> loadReservedTemplateWords() {
+		Set<String> reservedWords = new HashSet<String>();
+		reservedWords.addAll(loadReservedTemplateWordsEssential());
+		reservedWords.addAll(loadReservedTemplateWordsOptional());
+		return reservedWords;
+	}
+	
+	public Set<String> loadReservedTemplateWordsEssential() {
+		Set<String> reservedWordsEssential = new HashSet<String>();
+		for(String word : PropertiesUtil.getProperty("mysql.data.algorithms.AlgorithmsUtil.reservedWordsEssential").toString().split(",")) {
+			reservedWordsEssential.add(word);
+		}
+		return reservedWordsEssential;
+	}
+	
+	public Set<String> loadReservedTemplateWordsOptional() {
+		Set<String> reservedWordsOptional = new HashSet<String>();
+		for(String word : PropertiesUtil.getProperty("mysql.data.algorithms.AlgorithmsUtil.reservedWordsOptional").toString().split(",")) {
+			reservedWordsOptional.add(word);
+		}
+		return reservedWordsOptional;
+	}
+	
 	protected Set<String> loadStopWords() {
 		if(stopWordsSet == null) {
 			stopWordsSet = new HashSet<String>();
 			try {
-				BufferedReader reader = new BufferedReader(new FileReader(PropertiesUtil.getProperties().getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.stopWords")));
+				BufferedReader reader = new BufferedReader(new FileReader(PropertiesUtil.getProperty("mysql.data.analysis.quality.CommentsQualityAnalysis.stopWords")));
 				String line = "";
 				while((line = reader.readLine()) != null) {
 					stopWordsSet.add(line.trim());
@@ -142,26 +173,28 @@ public class AlgorithmsUtil {
 	}
 	
 	public static void main(String[] args) {
-		List<String> l1 = new ArrayList<String>();
-		List<String> l2 = new ArrayList<String>();
-		//  功能 从 驱动 中 读取 虚拟地址
-		l1.add("功能");
-		l1.add("从");
-		l1.add("驱动");
-		l1.add("中");
-		l1.add("读取");
-		l1.add("虚拟地址");
-		//  函数功能 从 驱动 中  读取
-		l2.add("函数功能");
-		l2.add("从");
-		l2.add("驱动");
-		l2.add("中");
-		l2.add("读取");
 		AlgorithmsUtil ins = new AlgorithmsUtil();
-		for(String s: ins.longestCommonString(l1, l2)){
-			System.out.print(s + "，");
-		}
-		System.out.println();
-		System.out.println(ins.editDistance(l1, l2));
+		System.out.println(ins.loadReservedTemplateWords());
+//		List<String> l1 = new ArrayList<String>();
+//		List<String> l2 = new ArrayList<String>();
+//		//  功能 从 驱动 中 读取 虚拟地址
+//		l1.add("功能");
+//		l1.add("从");
+//		l1.add("驱动");
+//		l1.add("中");
+//		l1.add("读取");
+//		l1.add("虚拟地址");
+//		//  函数功能 从 驱动 中  读取
+//		l2.add("函数功能");
+//		l2.add("从");
+//		l2.add("驱动");
+//		l2.add("中");
+//		l2.add("读取");
+//		AlgorithmsUtil ins = new AlgorithmsUtil();
+//		for(String s: ins.longestCommonString(l1, l2)){
+//			System.out.print(s + "，");
+//		}
+//		System.out.println();
+//		System.out.println(ins.editDistance(l1, l2));
 	}
 }

@@ -8,14 +8,12 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 
 import org.apache.log4j.Logger;
@@ -26,7 +24,6 @@ import mysql.data.util.PropertiesUtil;
 
 public class CommentClassifier {
 	private static final Logger log = Logger.getLogger(CommentClassifier.class);
-	private Properties props;
 	private String rootPath;
 	private String classifiedCommentPath;
 	private String commentAndTypes;
@@ -36,11 +33,9 @@ public class CommentClassifier {
 
 	
 	public CommentClassifier(){
-		props = PropertiesUtil.getProperties();
-		
-		this.rootPath = props.getProperty("mysql.data.DataSource.rootPath","commentData/");
-		this.classifiedCommentPath = rootPath+props.getProperty("mysql.data.analysis.TXTCommentAnalyzer.classifiedCommentPath","CLASSIFIED");
-		this.commentAndTypes = props.getProperty("mysql.data.CommentClassifier.commentsAndTypes");
+		this.rootPath = PropertiesUtil.getProperty("mysql.data.DataSource.rootPath","commentData/");
+		this.classifiedCommentPath = rootPath+PropertiesUtil.getProperty("mysql.data.analysis.TXTCommentAnalyzer.classifiedCommentPath","CLASSIFIED");
+		this.commentAndTypes = PropertiesUtil.getProperty("mysql.data.CommentClassifier.commentsAndTypes");
 	}
 	
 	public Connection getConn() {
@@ -85,7 +80,7 @@ public class CommentClassifier {
 	public void getAllCommentedTypes(boolean genNewFile){
 		if(genNewFile){
 			try {
-				BufferedReader reader = new BufferedReader(new FileReader(props.getProperty("mysql.data.DataSource.pathFile")));
+				BufferedReader reader = new BufferedReader(new FileReader(PropertiesUtil.getProperty("mysql.data.DataSource.pathFile")));
 				PrintWriter writer = new PrintWriter(new FileWriter(commentAndTypes));
 				String line ="";
 				while((line=reader.readLine())!=null){
@@ -120,7 +115,7 @@ public class CommentClassifier {
 		//通过不断读取保存一条注释内容，读满一条就写出
 		StringBuilder comment = new StringBuilder();
 		BufferedReader reader = new BufferedReader(
-				new FileReader(rootPath+"/"+props.getProperty("mysql.data.DataClean.filteredCommentsFile")));
+				new FileReader(rootPath+"/"+PropertiesUtil.getProperty("mysql.data.DataClean.filteredCommentsFile")));
 
 		//先把首行读出来，判断一个类别，初始化好 currentWriter
 		String line = reader.readLine();

@@ -13,6 +13,8 @@ import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -65,8 +67,11 @@ import javax.swing.tree.TreeNode;
 
 import mysql.data.analysis.CommentAnalyzer;
 import mysql.data.analysis.quality.CommentsQualityAnalysis;
+import mysql.data.analysis.quality.LxrTypeQualityInfo;
 import mysql.data.analysis.quality.ObjectiveViewQuality;
+import mysql.data.analysis.quality.SubjectiveViewQuality;
 import mysql.data.analysisDB.entity.JudgeTableInfo;
+import mysql.data.util.ConnectionUtil;
 import mysql.data.util.PropertiesUtil;
 
 import org.apache.log4j.Level;
@@ -107,7 +112,7 @@ public class EvaluationTool extends JFrame {
 	private boolean judgePanelInitialized = false;
 
 	private JTabbedPane jTabbedPane0;
-	
+
 	private JTabbedPane reportPanelTabbedPane;
 
 	private JPanel viewPanel;
@@ -119,11 +124,15 @@ public class EvaluationTool extends JFrame {
 	private JTextField tree_selected_path_text_field;
 
 	private JButton file_chooser_btn;
-	
+
+	private JButton rule_evaluation_btn;
+
 	private JFileChooser fc;
+
+	private JTable objective_quality_jtable;
 	
-	private JTable objective_quality_jtable;;
-	
+	private JTable subjective_quality_jtable;
+
 	private List<String> file_chooser_path_list;
 
 	private JLabel jLabel1;
@@ -184,6 +193,8 @@ public class EvaluationTool extends JFrame {
 
 	private JRadioButton color_type_template_radio_btn;
 
+	private JRadioButton color_type_template_no_stopwords_radio_btn;
+
 	private JPanel judgePanel;
 
 	private JLabel source_code_url_label;
@@ -195,11 +206,11 @@ public class EvaluationTool extends JFrame {
 	private JComboBox<String> comment_type_combo_box;
 
 	private JComboBox<String> judge_comment_type_combo_box;
-	
+
 	private ItemListener judge_comment_type_combo_box_item_listener = new ItemListener() {
 
 		public void itemStateChanged(ItemEvent event) {
-			if(event.getStateChange() == ItemEvent.SELECTED)
+			if (event.getStateChange() == ItemEvent.SELECTED)
 				judge_comment_type_combo_boxItemItemStateChanged(event);
 		}
 	};
@@ -255,7 +266,9 @@ public class EvaluationTool extends JFrame {
 	private JScrollPane jScrollPane3;
 
 	private JScrollPane jScrollPane5;
-
+	
+	private JScrollPane jScrollPane6;
+	
 	private JEditorPane comments_info_jEditorPane;
 
 	private JScrollPane jScrollPane4;
@@ -291,7 +304,7 @@ public class EvaluationTool extends JFrame {
 	}
 
 	private void initComponents() {
-		setTitle("源代码分析注释分析工具");
+		setTitle("源代码分析注释分析工具" + PropertiesUtil.getProperty("mysql.data.DataSource.commentdb"));
 		setLayout(new BorderLayout());
 		add(getJTabbedPane0());
 		setSize(714, 738);
@@ -346,18 +359,35 @@ public class EvaluationTool extends JFrame {
 		}
 		return comments_info_jEditorPane;
 	}
-
-	private JScrollPane getJTreeStatInfoScrollPane() {
+	
+	private JScrollPane getSubjectiveQualityPane() {
+		if (jScrollPane6 == null) {
+			jScrollPane6 = new JScrollPane();
+			jScrollPane6.setViewportView(getSubjectiveQualityJTable());
+		}
+		return jScrollPane6;
+	}
+	
+	private JTable getSubjectiveQualityJTable() {
+		if (subjective_quality_jtable == null) {
+			subjective_quality_jtable = new JTable();
+			subjective_quality_jtable.setFillsViewportHeight(true);
+			subjective_quality_jtable.setAutoCreateRowSorter(true);
+		}
+		return subjective_quality_jtable;
+	}
+	
+	private JScrollPane getObjectiveQualityPane() {
 		if (jScrollPane5 == null) {
 			jScrollPane5 = new JScrollPane();
 			jScrollPane5.setViewportView(getObjectiveQualityJTable());
 		}
 		return jScrollPane5;
 	}
-	
+
 	private JTable getObjectiveQualityJTable() {
-		if(objective_quality_jtable == null) {
-			
+		if (objective_quality_jtable == null) {
+
 			objective_quality_jtable = new JTable();
 			objective_quality_jtable.setFillsViewportHeight(true);
 			objective_quality_jtable.setAutoCreateRowSorter(true);
@@ -401,11 +431,9 @@ public class EvaluationTool extends JFrame {
 			source_code_url_label
 					.setText("<html><a href = ''>"
 							+ PropertiesUtil
-									.getProperties()
 									.getProperty(
 											"mysql.data.gui.EvaluationTool.sourcecode_url_prefix")
 							+ PropertiesUtil
-									.getProperties()
 									.getProperty(
 											"mysql.data.gui.EvaluationTool.sourcecode_url_version")
 							+ "</a></html>");
@@ -707,7 +735,8 @@ public class EvaluationTool extends JFrame {
 			judge_comment_type_combo_box = new JComboBox<String>();
 			judge_comment_type_combo_box.setDoubleBuffered(false);
 			judge_comment_type_combo_box.setBorder(null);
-			judge_comment_type_combo_box.addItemListener(judge_comment_type_combo_box_item_listener);
+			judge_comment_type_combo_box
+					.addItemListener(judge_comment_type_combo_box_item_listener);
 		}
 		return judge_comment_type_combo_box;
 	}
@@ -805,7 +834,7 @@ public class EvaluationTool extends JFrame {
 	private JRadioButton getColorTypeTemplateRadioButton() {
 		if (color_type_template_radio_btn == null) {
 			color_type_template_radio_btn = new JRadioButton();
-			color_type_template_radio_btn.setText("模板");
+			color_type_template_radio_btn.setText("着色");
 			color_type_template_radio_btn.setSelected(true);
 			color_type_template_radio_btn
 					.addActionListener(new ActionListener() {
@@ -816,6 +845,21 @@ public class EvaluationTool extends JFrame {
 					});
 		}
 		return color_type_template_radio_btn;
+	}
+
+	private JRadioButton getColorTypeTemplateNoStopwordsRadioButton() {
+		if (color_type_template_no_stopwords_radio_btn == null) {
+			color_type_template_no_stopwords_radio_btn = new JRadioButton();
+			color_type_template_no_stopwords_radio_btn.setText("模板");
+			color_type_template_no_stopwords_radio_btn
+					.addActionListener(new ActionListener() {
+						@Override
+						public void actionPerformed(ActionEvent e) {
+							jRadioButtonActionActionPerformed(e);
+						}
+					});
+		}
+		return color_type_template_no_stopwords_radio_btn;
 	}
 
 	private JRadioButton getColorTypeNounRadioButton() {
@@ -1027,8 +1071,26 @@ public class EvaluationTool extends JFrame {
 			fc.setMultiSelectionEnabled(false);
 			fc.setFileSelectionMode(JFileChooser.FILES_ONLY);
 		}
-		
+
 		return file_chooser_btn;
+	}
+
+	/**
+	 * 采用规则评判感知质量属性，此处从小样本已标注集合上评价规则的好坏
+	 * 
+	 * @return
+	 */
+	private JButton getRuleEvaluationBtn() {
+		if (rule_evaluation_btn == null) {
+			rule_evaluation_btn = new JButton();
+			rule_evaluation_btn.setText("规则校验");
+			rule_evaluation_btn.addMouseListener(new MouseAdapter() {
+				public void mouseClicked(MouseEvent event) {
+					rule_evaluation_btnMouseMouseClicked(event);
+				}
+			});
+		}
+		return rule_evaluation_btn;
 	}
 
 	private JTextField getTreeSelectedPathJTextField() {
@@ -1122,7 +1184,6 @@ public class EvaluationTool extends JFrame {
 		}
 		return jTabbedPane0;
 	}
-	
 
 	private JPanel getViewPanel() {
 		if (viewPanel == null) {
@@ -1158,7 +1219,7 @@ public class EvaluationTool extends JFrame {
 			judgePanel = new JPanel();
 			judgePanel.setLayout(new BorderLayout());
 
-			//最上面的注释类型
+			// 最上面的注释类型
 			JPanel comment_type_pane = new JPanel(new FlowLayout());
 			comment_type_pane.add(getJLabel3());
 			comment_type_pane.add(getJudgeCommentTypeComboBox());
@@ -1171,7 +1232,7 @@ public class EvaluationTool extends JFrame {
 			comment_count_pane.add(getJudged_comment_label());
 			comment_count_pane.add(getJLabel8());
 
-			// 评阅状态  未评阅  已评阅
+			// 评阅状态 未评阅 已评阅
 			JPanel comment_judge_state_pane = new JPanel(new FlowLayout());
 			comment_judge_state_pane.add(getUnjudgeRadioButton());
 			comment_judge_state_pane.add(getJudgedRadioButton());
@@ -1185,7 +1246,7 @@ public class EvaluationTool extends JFrame {
 
 			judgePanel.add(header_pane, BorderLayout.NORTH);
 
-			//右侧主要的显示注释内容的面板
+			// 右侧主要的显示注释内容的面板
 			JPanel comment_info_panel = new JPanel(new BorderLayout());
 
 			JPanel url_panel = new JPanel(new GridLayout(3, 1));
@@ -1254,15 +1315,19 @@ public class EvaluationTool extends JFrame {
 
 			score_panel.add(score_grid_panel);
 			comment_info_panel.add(score_panel, BorderLayout.SOUTH);
-			
+
 			JPanel left_panel = new JPanel(new BorderLayout());
-			left_panel.add(getJScrollPane1(),BorderLayout.CENTER);
-			left_panel.add(getFileChooserBtn(), BorderLayout.SOUTH);
-			
+			left_panel.add(getJScrollPane1(), BorderLayout.CENTER);
+
+			JPanel left_bottom = new JPanel(new GridLayout(1, 2));
+
+			left_bottom.add(getFileChooserBtn());
+			left_bottom.add(getRuleEvaluationBtn());
+
+			left_panel.add(left_bottom, BorderLayout.SOUTH);
 
 			JSplitPane hor_split_pane = new JSplitPane(
-					JSplitPane.HORIZONTAL_SPLIT, left_panel,
-					comment_info_panel);
+					JSplitPane.HORIZONTAL_SPLIT, left_panel, comment_info_panel);
 			hor_split_pane.setDividerSize(3);
 			hor_split_pane.setDividerLocation(250);
 			hor_split_pane.setOneTouchExpandable(true);
@@ -1298,7 +1363,8 @@ public class EvaluationTool extends JFrame {
 			left_panel.add(left_bottom_panel, BorderLayout.SOUTH);
 
 			JSplitPane hor_split_pane = new JSplitPane(
-					JSplitPane.HORIZONTAL_SPLIT, left_panel, getReportPanelJTabbedPane());
+					JSplitPane.HORIZONTAL_SPLIT, left_panel,
+					getReportPanelJTabbedPane());
 			hor_split_pane.setDividerSize(3);
 			hor_split_pane.setOneTouchExpandable(true);
 			hor_split_pane.setDividerLocation(200);
@@ -1307,28 +1373,31 @@ public class EvaluationTool extends JFrame {
 		}
 		return reportPanel;
 	}
-	
+
 	private JTabbedPane getReportPanelJTabbedPane() {
-		if(reportPanelTabbedPane == null) {
+		if (reportPanelTabbedPane == null) {
 			reportPanelTabbedPane = new JTabbedPane();
-			reportPanelTabbedPane.add("固有质量属性", getJTreeStatInfoScrollPane());
+			reportPanelTabbedPane.add("固有质量属性", getObjectiveQualityPane());
+			reportPanelTabbedPane.add("感知质量属性", getSubjectiveQualityPane());
 			reportPanelTabbedPane.add("注释详情", getJTreeCommentInfoPanel());
 		}
 		return reportPanelTabbedPane;
 	}
-	
+
 	private JPanel getJTreeCommentInfoPanel() {
 		JPanel color_type_panel = new JPanel();
-		color_type_panel.setLayout(new GridLayout(1, 4));
+		color_type_panel.setLayout(new GridLayout(1, 5));
 		color_type_panel.add(getColorTypeTemplateRadioButton());
+		color_type_panel.add(getColorTypeTemplateNoStopwordsRadioButton());
 		color_type_panel.add(getColorTypeNounRadioButton());
 		color_type_panel.add(getColorTypeVerbRadioButton());
 		color_type_panel.add(getColorTypeOtherRadioButton());
 		color_type_bg.add(getColorTypeTemplateRadioButton());
+		color_type_bg.add(getColorTypeTemplateNoStopwordsRadioButton());
 		color_type_bg.add(getColorTypeNounRadioButton());
 		color_type_bg.add(getColorTypeVerbRadioButton());
 		color_type_bg.add(getColorTypeOtherRadioButton());
-		
+
 		JPanel comments_info_panel = new JPanel();
 		comments_info_panel.setLayout(new BorderLayout());
 		comments_info_panel.add(getJTreeCommentTypeComboBox(),
@@ -1373,8 +1442,15 @@ public class EvaluationTool extends JFrame {
 		JFrame frame = new EvaluationTool();
 		frame.setVisible(true);
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-	}
+		frame.addWindowListener(new WindowAdapter() {
 
+			@Override
+			public void windowClosing(WindowEvent e) {
+				super.windowClosing(e);
+				ConnectionUtil.close();
+			}
+		});
+	}
 
 	private void update_view_comment() {
 		String path = view_path_text_field.getText();
@@ -1391,9 +1467,11 @@ public class EvaluationTool extends JFrame {
 				if (entry.getKey().startsWith(path)) {
 					filteredComments.put(entry.getKey(), entry.getValue());
 					types.add(comment_types.get(entry.getKey()));
-					content.append("###################   " + entry.getKey()
+					content.append("###################   "
+							+ entry.getKey()
 							+ "   ###################\r\n"
-							+ CommentAnalyzer.COMMON_FILTER.getText(entry.getValue()) + "\r\n\r\n");
+							+ CommentAnalyzer.COMMON_FILTER.getText(entry
+									.getValue()) + "\r\n\r\n");
 				}
 			}
 
@@ -1406,14 +1484,14 @@ public class EvaluationTool extends JFrame {
 
 	private void file_chooser_btnMouseMouseClicked(MouseEvent event) {
 		int return_val = fc.showOpenDialog(EvaluationTool.this);
-		if(return_val == JFileChooser.APPROVE_OPTION) {
+		if (return_val == JFileChooser.APPROVE_OPTION) {
 			File file = fc.getSelectedFile();
 			file_chooser_path_list = new ArrayList<String>();
 			try {
 				BufferedReader reader = new BufferedReader(new FileReader(file));
 				String line = "";
-				while((line = reader.readLine()) != null) {
-					if(!line.equals("")){
+				while ((line = reader.readLine()) != null) {
+					if (!line.equals("")) {
 						file_chooser_path_list.add(line.trim());
 					}
 				}
@@ -1421,9 +1499,69 @@ public class EvaluationTool extends JFrame {
 			} catch (IOException e) {
 				e.printStackTrace();
 			}
-			
+
 			updateCommentPathList(0, "ALL", true);
 		}
+	}
+
+	private void rule_evaluation_btnMouseMouseClicked(MouseEvent event) {
+		int true_positive = 0;
+		int false_positive = 0;
+		int true_negative = 0;
+		int false_negative = 0;
+
+		SubjectiveViewQuality svq = new SubjectiveViewQuality();
+		
+		for(String path: file_chooser_path_list) {
+			int state = svq.getValidState(path);
+			if(state == SubjectiveViewQuality.TRUE_POSITIVE) {
+				++true_positive;
+			} else if (state == SubjectiveViewQuality.TRUE_NEGATIVE) {
+				++true_negative;
+			} else if (state == SubjectiveViewQuality.FALSE_POSITIVE) {
+				++false_positive;
+			} else if (state == SubjectiveViewQuality.FALSE_NEGATIVE) {
+				++false_negative;
+			}
+		}
+		
+		logger.warn("有效性");
+		logger.warn(true_positive);
+		logger.warn(false_positive);
+		double precision = (double)true_positive/(true_positive + false_positive);
+		logger.warn(precision);
+		logger.warn(true_negative);
+		logger.warn(false_negative);
+		double recall = (double) true_positive/(true_positive + false_negative);
+		logger.warn(recall);
+		
+		
+		true_positive = 0;
+		false_positive = 0;
+		true_negative = 0;
+		false_negative = 0;
+		for(String path: file_chooser_path_list) {
+			int state = svq.getInfomativeState(path);
+			if(state == SubjectiveViewQuality.TRUE_POSITIVE) {
+				++true_positive;
+			} else if (state == SubjectiveViewQuality.TRUE_NEGATIVE) {
+				++true_negative;
+			} else if (state == SubjectiveViewQuality.FALSE_POSITIVE) {
+				++false_positive;
+			} else if (state == SubjectiveViewQuality.FALSE_NEGATIVE) {
+				++false_negative;
+			}
+		}
+		
+		logger.warn("信息量");
+		logger.warn(true_positive);
+		logger.warn(false_positive);
+		precision = (double)true_positive/(true_positive + false_positive);
+		logger.warn(precision);
+		logger.warn(true_negative);
+		logger.warn(false_negative);
+		recall = (double) true_positive/(true_positive + false_negative);
+		logger.warn(recall);
 	}
 
 	private void filter_view_comment() {
@@ -1433,9 +1571,11 @@ public class EvaluationTool extends JFrame {
 
 			for (Map.Entry<String, String> entry : filteredComments.entrySet()) {
 				if (comment_types.get(entry.getKey()).equals(type)) {
-					content.append("###################   " + entry.getKey()
+					content.append("###################   "
+							+ entry.getKey()
 							+ "   ###################\r\n"
-							+ CommentAnalyzer.COMMON_FILTER.getText(entry.getValue()) + "\r\n\r\n");
+							+ CommentAnalyzer.COMMON_FILTER.getText(entry
+									.getValue()) + "\r\n\r\n");
 				}
 			}
 
@@ -1456,7 +1596,7 @@ public class EvaluationTool extends JFrame {
 
 		jti.setCompleteness_score(Integer
 				.parseInt(completeness_score_text_field.getText()));
-		jti.setConsistency_score(Integer.parseInt(consistency_score_text_field
+		jti.setConsistency_score(Double.parseDouble(consistency_score_text_field
 				.getText()));
 		jti.setInformation_score(Integer.parseInt(infomation_score_text_field
 				.getText()));
@@ -1470,12 +1610,13 @@ public class EvaluationTool extends JFrame {
 				.getText()));
 
 		ep.updateJudgeInfo(jti);
-		
+
 		int state = 0;
-		if(judge_type_judged_radio_btn.isSelected()) {
+		if (judge_type_judged_radio_btn.isSelected()) {
 			state = 1;
 		}
-		String comment_type = judge_comment_type_combo_box.getSelectedItem().toString();
+		String comment_type = judge_comment_type_combo_box.getSelectedItem()
+				.toString();
 		updateCommentPathList(state, comment_type, false);
 		comment_path_list.setSelectedIndex(0);
 	}
@@ -1507,7 +1648,8 @@ public class EvaluationTool extends JFrame {
 			// setTitle(((JRadioButton)source).getText());
 		} else if (source == template_type_same_editor_radio_btn
 				|| source == template_type_same_type_radio_btn
-				|| source == color_type_template_radio_btn) {
+				|| source == color_type_template_radio_btn
+				|| source == color_type_template_no_stopwords_radio_btn) {
 			template_type_same_editor_radio_btn.setEnabled(true);
 			template_type_same_type_radio_btn.setEnabled(true);
 			updateTreeColorInfo();
@@ -1527,32 +1669,33 @@ public class EvaluationTool extends JFrame {
 	 * @param comment_type
 	 *            ALL表示全部类型，其他的指定特定的类型
 	 * @param update_type_combo_box
-	 * 			  是否更新注释类型的下拉列表           
+	 *            是否更新注释类型的下拉列表
 	 * 
 	 */
-	private void updateCommentPathList(int state, String comment_type, boolean update_type_combo_box) {
+	private void updateCommentPathList(int state, String comment_type,
+			boolean update_type_combo_box) {
 		int total_comment_count = 0;
 		int judged_comment_count = 0;
 
 		if (judgeList != null) {
 			DefaultListModel<String> listModel = new DefaultListModel<String>();
 			TreeSet<JudgeTableInfo> list = new TreeSet<JudgeTableInfo>();
-			if(file_chooser_path_list == null) {
+			if (file_chooser_path_list == null) {
 				for (JudgeTableInfo jti : judgeList.values()) {
 					list.add(jti);
 				}
 			} else {
-				for(String path : file_chooser_path_list) {
+				for (String path : file_chooser_path_list) {
 					list.add(judgeList.get(path));
 				}
 			}
-			
-			//保存不同的类型，用来更新注释类型的下拉列表
+
+			// 保存不同的类型，用来更新注释类型的下拉列表
 			Set<String> allTypes = new HashSet<String>();
-			
+
 			for (JudgeTableInfo jti : list) {
 				allTypes.add(comment_types.get(jti.getComment_path()));
-				
+
 				if (state == 0) {
 					if (comment_types.get(jti.getComment_path()).equals(
 							comment_type)
@@ -1580,16 +1723,18 @@ public class EvaluationTool extends JFrame {
 			comment_path_list.setModel(listModel);
 			total_comment_label.setText(total_comment_count + "");
 			judged_comment_label.setText(judged_comment_count + "");
-			
-			if(update_type_combo_box) {
+
+			if (update_type_combo_box) {
 				judge_comment_type_combo_box.removeAllItems();
-				//修改下拉列表项目前去掉listener，以免误触发
-				judge_comment_type_combo_box.removeItemListener(judge_comment_type_combo_box_item_listener);
+				// 修改下拉列表项目前去掉listener，以免误触发
+				judge_comment_type_combo_box
+						.removeItemListener(judge_comment_type_combo_box_item_listener);
 				judge_comment_type_combo_box.addItem("ALL");
 				for (String t : allTypes) {
 					judge_comment_type_combo_box.addItem(t);
 				}
-				judge_comment_type_combo_box.addItemListener(judge_comment_type_combo_box_item_listener);
+				judge_comment_type_combo_box
+						.addItemListener(judge_comment_type_combo_box_item_listener);
 			}
 		}
 	}
@@ -1613,7 +1758,8 @@ public class EvaluationTool extends JFrame {
 			// 更新注释框所显示的注释内容
 			if (selected_path != null) {
 				selected_comment_jeditor_pane.setText(getColoredInfo(
-						selected_path, CommentAnalyzer.TEMPLATE_SAME_TYPE));
+						selected_path, CommentAnalyzer.TEMPLATE_SAME_TYPE,
+						false));
 			}
 
 			// 更新源码路径的url信息
@@ -1630,11 +1776,11 @@ public class EvaluationTool extends JFrame {
 
 			// 0表示未评， -1表示无效，1表示有效
 			int validation_state = selected_judge_info.getValidation_state();
-			if (validation_state == 0) {
+			if (validation_state == JudgeTableInfo.NON_JUDGE) {
 				getValidationEmptyRadioButton().setSelected(true);
-			} else if (validation_state == 1) {
+			} else if (validation_state == JudgeTableInfo.VALID) {
 				getValidRadioButton().setSelected(true);
-			} else if (validation_state == -1) {
+			} else if (validation_state == JudgeTableInfo.INVALID) {
 				getInvalidRadioButton().setSelected(true);
 			}
 
@@ -1658,10 +1804,10 @@ public class EvaluationTool extends JFrame {
 	private void update_source_code_url_label_text(String filename,
 			String lineNo) {
 		StringBuilder url = new StringBuilder();
-		url.append(PropertiesUtil.getProperties().getProperty(
+		url.append(PropertiesUtil.getProperty(
 				"mysql.data.gui.EvaluationTool.sourcecode_url_prefix"));
 		url.append(filename);
-		url.append(PropertiesUtil.getProperties().getProperty(
+		url.append(PropertiesUtil.getProperty(
 				"mysql.data.gui.EvaluationTool.sourcecode_url_version"));
 		if (!lineNo.equals("-1")) {
 			url.append("#").append(lineNo);
@@ -1675,8 +1821,9 @@ public class EvaluationTool extends JFrame {
 	private void judge_comment_type_combo_boxItemItemStateChanged(
 			ItemEvent event) {
 		@SuppressWarnings("unchecked")
-		Object selected_item = ((JComboBox<String>) event.getSource()).getSelectedItem();
-		if(selected_item != null) {
+		Object selected_item = ((JComboBox<String>) event.getSource())
+				.getSelectedItem();
+		if (selected_item != null) {
 			boolean unjudged = judge_type_unjudge_radio_btn.isSelected();
 			if (unjudged) {
 				updateCommentPathList(0, selected_item.toString(), false);
@@ -1757,8 +1904,9 @@ public class EvaluationTool extends JFrame {
 		}
 	}
 
-	public String getColoredInfo(String path, int template_type) {
-		return ca.getColoredInfo(path, template_type);
+	public String getColoredInfo(String path, int template_type,
+			boolean noStopwords) {
+		return ca.getColoredInfo(path, template_type, noStopwords);
 	}
 
 	private void buildPathTree() {
@@ -1791,21 +1939,23 @@ public class EvaluationTool extends JFrame {
 		return pathTree.get(path);
 
 	}
-	
-	//只更新着色面板的内容
+
+	// 只更新着色面板的内容
 	private void updateTreeColorInfo() {
-		
+
 		comments_info_jEditorPane.setText("处理中");
 		if (tree_comment_info == null) {
 			tree_comment_info = new TreeMap<String, String>();
 		} else {
 			tree_comment_info.clear();
 		}
-		
+
 		String selectedPath = tree_selected_path_text_field.getText();
 
 		if (selectedPath != null && !selectedPath.equals("")) {
-			Thread color_template_task = new Thread(new ColoredCommentInfoUpdateTask(selectedPath, update_counter));
+			Thread color_template_task = new Thread(
+					new ColoredCommentInfoUpdateTask(selectedPath,
+							update_counter));
 			color_template_task.start();
 		}
 	}
@@ -1831,37 +1981,46 @@ public class EvaluationTool extends JFrame {
 			for (int i = 1; i < tn.length; ++i) {
 				sb.append("/" + tn[i].toString());
 			}
-			tree_selected_path_text_field.setText(sb.toString());
-
+			if(tn.length == 1) {
+				tree_selected_path_text_field.setText(tn[0].toString());
+			} else {
+				tree_selected_path_text_field.setText(sb.toString());
+			}
 			updateTreeCommentInfo();
 		}
-
 	}
 
 	class BackgroundUpdateTask implements Runnable {
 
 		@Override
 		public void run() {
-			// 每次各一个唯一的更新编号，如果当前这个处理还没有处理完，又点了其他路径，update_counter会变大，这样的话当前这次计算的结果就不会覆盖后点击的路径结果。
+			// 每次给一个唯一的更新编号，如果当前这个处理还没有处理完，又点了其他路径，update_counter会变大，这样的话当前这次计算的结果就不会覆盖后点击的路径结果。
 			int mycounter = ++update_counter;
 			String selectedPath = tree_selected_path_text_field.getText();
 
 			if (selectedPath != null && !selectedPath.equals("")) {
-				Thread color_template_task = new Thread(new ColoredCommentInfoUpdateTask(selectedPath, mycounter));
-				color_template_task.start();
-				
-				Thread objective_view_quality_task = new Thread(new ObjectiveViewQualityInfoUpdateTask(selectedPath, mycounter));
+				Thread objective_view_quality_task = new Thread(
+						new ObjectiveViewQualityInfoUpdateTask(selectedPath,
+								mycounter));
 				objective_view_quality_task.start();
+				
+//				Thread subjective_view_quality_task = new Thread(new SubjectiveViewQualityInfoUpdateTask(selectedPath, mycounter));
+//				subjective_view_quality_task.start();
+//				
+//				Thread color_template_task = new Thread(
+//						new ColoredCommentInfoUpdateTask(selectedPath,
+//								mycounter));
+//				color_template_task.start();
 			}
 		}
 
 	}
-	
+
 	class ObjectiveViewQualityInfoUpdateTask implements Runnable {
 		private String selected_path;
-		
+
 		private int mycounter;
-		
+
 		public ObjectiveViewQualityInfoUpdateTask(String path, int counter) {
 			this.selected_path = path;
 			this.mycounter = counter;
@@ -1869,32 +2028,46 @@ public class EvaluationTool extends JFrame {
 
 		@Override
 		public void run() {
-			ObjectiveViewQuality ovq = new ObjectiveViewQuality(cqa.statCommentedRatio(selected_path));
-			
-			Map<String, JudgeTableInfo> all_judge_info = ep.loadJudgeInfoFromDB();
-			for(String path : all_judge_info.keySet()) {
-				if(path.startsWith(selected_path)) {
+			ObjectiveViewQuality ovq = new ObjectiveViewQuality(
+					cqa.statCommentedRatio(selected_path));
+
+			Map<String, JudgeTableInfo> all_judge_info = ep
+					.loadJudgeInfoFromDB();
+			for (String path : all_judge_info.keySet()) {
+				if (path.startsWith(selected_path)) {
 					String type = ca.loadCommentsTypes().get(path);
-					if(ovq.getAllTypes().contains(type)) {
+					if (ovq.getAllTypes().contains(type)) {
 						JudgeTableInfo jti = all_judge_info.get(path);
-						if(jti.getIs_redundant() == 1) {
-							ovq.getLxrTypeQualityInfo(type).addRedundant_comments_count();
+						LxrTypeQualityInfo info = ovq.getLxrTypeQualityInfo(type);
+						if (jti.getIs_redundant() == 1) {
+							info.addRedundant_comments_count();
 						}
-						ovq.getLxrTypeQualityInfo(type).addTotal_consistency_score(jti.getConsistency_score());
-						ovq.getLxrTypeQualityInfo(type).addTotal_length(CommentAnalyzer.COMMON_FILTER.getText(ca.getAllComments().get(path)).length());
+						info.addTotal_consistency_score(jti.getConsistency_score());
+						info.addTotal_length(CommentAnalyzer.COMMON_FILTER.getText(ca.getAllComments().get(path)).length());
+						info.addImage_count(jti.getImage_count());
+						info.addUrl_count(jti.getUrl_count());
 					}
 				}
 			}
-			
-			final String[] names = {"注释类型", "注释数", "注释数占比","注释入口数","注释覆盖度","冗余注释数","冗余占比","平均规范性得分","平均文本长度"}; 
-			
+
+			final String[] names = { "注释类型", "注释数", "注释数占比", "注释入口数", "注释覆盖度",
+					"冗余注释数", "冗余占比", "平均规范性得分", "平均文本长度", "图片数", "超链接数" };
+
 			List<String> type_list = new ArrayList<String>(ovq.getAllTypes());
-			
+ 
 			final Object[][] data = new Object[type_list.size()][];
-			
-			for(int i = 0; i < data.length; ++i) {
+
+			for (int i = 0; i < data.length; ++i) {
 				String type = type_list.get(i);
-				data[i] = new Object[] {type, ovq.getCommentsCount(type), ovq.getCommentsRatio(type), ovq.getEntriesCount(type), ovq.getCoverageRatio(type), ovq.getRedundantCount(type), ovq.getRedundantRatio(type), ovq.getConsistencyScore(type), ovq.getAverageLength(type)};
+				data[i] = new Object[] { type, ovq.getCommentsCount(type),
+						ovq.getCommentsRatio(type), ovq.getEntriesCount(type),
+						ovq.getCoverageRatio(type),
+						ovq.getRedundantCount(type),
+						ovq.getRedundantRatio(type),
+						ovq.getConsistencyScore(type),
+						ovq.getAverageLength(type),
+						ovq.getImageCount(type),
+						ovq.getUrlCount(type)};
 			}
 
 			TableModel table_model = new AbstractTableModel() {
@@ -1928,38 +2101,144 @@ public class EvaluationTool extends JFrame {
 				public void setValueAt(Object aValue, int row, int column) {
 					data[row][column] = aValue;
 				}
-				
+
 			};
-			
-			if(mycounter == update_counter) {
+
+			if (mycounter == update_counter) {
 				objective_quality_jtable.setModel(table_model);
 				DefaultTableCellRenderer render = new DefaultTableCellRenderer();
 				render.setHorizontalAlignment(SwingConstants.CENTER);
-				for(String name: names) {
-					objective_quality_jtable.getColumn(name).setCellRenderer(render);
+				for (String name : names) {
+					objective_quality_jtable.getColumn(name).setCellRenderer(
+							render);
 				}
 			}
-			
-			
+
 		}
-		
-		
+
+	}
+
+	
+	class SubjectiveViewQualityInfoUpdateTask implements Runnable {
+		private String selected_path;
+
+		private int mycounter;
+
+		public SubjectiveViewQualityInfoUpdateTask(String path, int counter) {
+			this.selected_path = path;
+			this.mycounter = counter;
+		}
+
+		@Override
+		public void run() {
+			SubjectiveViewQuality svq = new SubjectiveViewQuality();
+			
+			Map<String, Integer> type_counter = new TreeMap<String, Integer>();
+			Map<String, JudgeTableInfo> all_judge_info = ep.loadJudgeInfoFromDB();
+			for (String path : all_judge_info.keySet()) {
+				if (path.startsWith(selected_path)) {
+					String type = ca.loadCommentsTypes().get(path);
+					if(type.equals("function definition") || type.equals("variable definition") || type.equals("class, struct, or union member") || type.equals("macro (un)definition")) {
+						if(type_counter.containsKey(type)) {
+							type_counter.put(type, type_counter.get(type) + 1);
+						} else {
+							type_counter.put(type, 1);
+						}
+						if(svq.isValid(path)) {
+							svq.addValid(type);
+						}
+						if(svq.isInformative(path)) {
+							svq.addInformative(type);
+						}
+						if(svq.isComplete(path)) {
+							svq.addComplete(type);
+						}
+					}
+				}
+			}
+
+			final String[] names = { "注释类型", "注释数", "有效注释", "有效占比", "信息量", "信息量合格占比", "完备性", "完备占比"};
+
+			List<String> type_list = new ArrayList<String>(type_counter.keySet());
+ 
+			final Object[][] data = new Object[type_list.size()][];
+
+			for (int i = 0; i < data.length; ++i) {
+				String type = type_list.get(i);
+				int total = type_counter.get(type);
+				int valid_count = svq.getValidCount(type);
+				int informative_count = svq.getInformativeCount(type);
+				int complete_count = svq.getCompleteCount(type);
+				double valid_ratio = (double) valid_count / total;
+				double informative_ratio = (double) informative_count / total;
+				double complete_ratio = (double) complete_count / total;
+				
+				data[i] = new Object[] { type, total, valid_count, String.format("%.2f%%", valid_ratio * 100), informative_count, String.format("%.2f%%", informative_ratio * 100), complete_count, String.format("%.2f%%", complete_ratio * 100)};
+			}
+
+			TableModel table_model = new AbstractTableModel() {
+				@Override
+				public Object getValueAt(int rowIndex, int columnIndex) {
+					return data[rowIndex][columnIndex];
+				}
+
+				@Override
+				public int getRowCount() {
+					return data.length;
+				}
+
+				@Override
+				public int getColumnCount() {
+					return names.length;
+				}
+
+				public String getColumnName(int column) {
+					return names[column];
+				}
+
+				public Class getColumnClass(int c) {
+					return getValueAt(0, c).getClass();
+				}
+
+				public boolean isCellEditable(int row, int col) {
+					return false;
+				}
+
+				public void setValueAt(Object aValue, int row, int column) {
+					data[row][column] = aValue;
+				}
+
+			};
+
+			if (mycounter == update_counter) {
+				subjective_quality_jtable.setModel(table_model);
+				DefaultTableCellRenderer render = new DefaultTableCellRenderer();
+				render.setHorizontalAlignment(SwingConstants.CENTER);
+				for (String name : names) {
+					subjective_quality_jtable.getColumn(name).setCellRenderer(render);
+				}
+			}
+
+		}
+
 	}
 	
+	
+	
 	class ColoredCommentInfoUpdateTask implements Runnable {
-		
-		//所选的代码路径
+
+		// 所选的代码路径
 		private String selected_path;
-		//该线程的更新令牌号，只有当令牌号不小于update_counter的时候，才执行更新
+		// 该线程的更新令牌号，只有当令牌号不小于update_counter的时候，才执行更新
 		private int mycounter;
-		
+
 		WordSeg wordSeg = new WordSeg();
-		
+
 		public ColoredCommentInfoUpdateTask(String path, int counter) {
 			this.selected_path = path;
 			this.mycounter = counter;
 		}
-		
+
 		/**
 		 * 将注释按词性着色
 		 * 
@@ -1979,12 +2258,12 @@ public class EvaluationTool extends JFrame {
 			if (pos_tag == WordSeg.PUNCTUATION) {
 				for (String w : seg_result) {
 					int index = w.lastIndexOf('/');
-					if(index > 0) {
+					if (index > 0) {
 						if (w.charAt(index + 1) != pos_tag
 								&& w.charAt(index + 1) != WordSeg.NOUN
 								&& w.charAt(index + 1) != WordSeg.VERB) {
-							result.append(ca.getColorString(w.substring(0, index),
-									color));
+							result.append(ca.getColorString(
+									w.substring(0, index), color));
 						} else {
 							result.append(w.substring(0, index));
 						}
@@ -1993,58 +2272,53 @@ public class EvaluationTool extends JFrame {
 			} else {
 				for (String w : seg_result) {
 					int index = w.lastIndexOf('/');
-					if(index > 0){
+					if (index > 0) {
 						if (w.charAt(index + 1) == pos_tag) {
-							result.append(ca.getColorString(w.substring(0, index),
-									color));
+							result.append(ca.getColorString(
+									w.substring(0, index), color));
 						} else {
 							result.append(w.substring(0, index));
-						}	
+						}
 					}
 				}
 			}
 
 			return result.toString();
 		}
-		
-		//传入path，得到每一个path的注释入口信息，包含url和所有的作者
-				private String getTitle(String path) {
-					String type = comment_types.get(path);
 
-					String filename = "";
-					if (!type.equals("file")) {
-						filename = path.substring(0, path.lastIndexOf("/"));
-					} else {
-						filename = path;
-					}
+		// 传入path，得到每一个path的注释入口信息，包含url和所有的作者
+		private String getTitle(String path) {
+			String type = comment_types.get(path);
 
-					StringBuilder url = new StringBuilder();
-					url.append(PropertiesUtil
-							.getProperties()
-							.getProperty(
-									"mysql.data.gui.EvaluationTool.sourcecode_url_prefix"));
-					url.append(filename);
-					url.append(PropertiesUtil
-							.getProperties()
-							.getProperty(
-									"mysql.data.gui.EvaluationTool.sourcecode_url_version"));
+			String filename = "";
+			if (!type.equals("file")) {
+				filename = path.substring(0, path.lastIndexOf("/"));
+			} else {
+				filename = path;
+			}
 
-					if (!type.equals("file")) {
-						url.append("#" + getLineNo(path));
-					}
+			StringBuilder url = new StringBuilder();
+			url.append(PropertiesUtil.getProperty(
+					"mysql.data.gui.EvaluationTool.sourcecode_url_prefix"));
+			url.append(filename);
+			url.append(PropertiesUtil.getProperty(
+					"mysql.data.gui.EvaluationTool.sourcecode_url_version"));
 
-					String title = "<a href = '" + url.toString() + "'>"
-							+ path + "</a>   "
-							+ ca.getPathEditors().get(path).toString()
-							+ "<br/>";
-					
-					return title;
-				}
+			if (!type.equals("file")) {
+				url.append("#" + getLineNo(path));
+			}
+
+			String title = "<a href = '" + url.toString() + "'>" + path
+					+ "</a>   " + ca.getPathEditors().get(path).toString()
+					+ "<br/>";
+
+			return title;
+		}
 
 		@Override
 		public void run() {
 			jTree_comment_type_comboBox.removeAllItems();
-			
+
 			// 选择抽取模板的模式
 			int template_type = CommentAnalyzer.TEMPLATE_SAME_TYPE;
 
@@ -2053,10 +2327,13 @@ public class EvaluationTool extends JFrame {
 			} else if (template_type_same_type_radio_btn.isSelected()) {
 				template_type = CommentAnalyzer.TEMPLATE_SAME_TYPE;
 			}
-			
+
 			StringBuilder comments = new StringBuilder();
 			Set<String> type_set = new HashSet<String>();
-			
+
+			boolean noStopWords = color_type_template_no_stopwords_radio_btn
+					.isSelected();
+
 			// 为了避免多线程时的界面更新异常，先定义一个临时变量temp_tree_comment_info保存当前选中路径的注释着色信息，等确定是本线程更新以后，在更新EvaluationTool里面的tree_comment_info变量
 			Map<String, String> temp_tree_comment_info = new HashMap<String, String>();
 			for (Map.Entry<String, String> entry : allComments.entrySet()) {
@@ -2064,13 +2341,16 @@ public class EvaluationTool extends JFrame {
 				if (path.startsWith(selected_path)) {
 					String title = getTitle(path);
 					comments.append(title);
-					
+
 					String type = comment_types.get(path);
 					type_set.add(type);
 
 					String color_info = "";
-					if (color_type_template_radio_btn.isSelected()) {
-						color_info = getColoredInfo(path, template_type);
+					if (color_type_template_radio_btn.isSelected()
+							|| color_type_template_no_stopwords_radio_btn
+									.isSelected()) {
+						color_info = getColoredInfo(path, template_type,
+								noStopWords);
 					} else if (color_type_noun_radio_btn.isSelected()) {
 						color_info = getColorString(WordSeg.NOUN, "blue",
 								entry.getValue());
@@ -2088,7 +2368,7 @@ public class EvaluationTool extends JFrame {
 					temp_tree_comment_info.put(path, title + color_info);
 				}
 			}
-			
+
 			if (mycounter == update_counter) {
 				tree_comment_info = temp_tree_comment_info;
 				comments_info_jEditorPane.setText(comments.toString());
@@ -2101,6 +2381,6 @@ public class EvaluationTool extends JFrame {
 				logger.warn("cancle " + selected_path);
 			}
 		}
-		
+
 	}
 }

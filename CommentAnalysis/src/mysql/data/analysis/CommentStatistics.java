@@ -5,11 +5,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.Map;
 
-import mysql.data.analysisDB.entity.CommentTableInfo;
-import mysql.data.filter.DoNothingFilter;
-import mysql.data.filter.FilterBase;
 import mysql.data.filter.IscasChineseCommentExtractor;
-import mysql.data.filter.IscasLinkFilter;
 import mysql.data.util.FileUtil;
 import mysql.data.util.LxrType;
 import mysql.data.util.PropertiesUtil;
@@ -55,7 +51,7 @@ public class CommentStatistics {
 	}
 	
 	public static void IscasCommentWithoutSourceCode() throws IOException{
-		String SourceCodePath = PropertiesUtil.getProperties().getProperty("linuxSource.dir");
+		String SourceCodePath = PropertiesUtil.getProperty("linuxSource.dir");
 		
 		Map<String,String> comments = TXTCommentAnalyzer.readContentToMap(FileUtil.readableFile(TXTCommentAnalyzer.DEFAULTPATH + "\\noLinkAndImageMap\\CLASSIFICATION_function definition.txt"), TXTCommentAnalyzer.DEFAULTSPLITER);
 		PrintWriter writer = new PrintWriter(FileUtil.writeableFile(TXTCommentAnalyzer.DEFAULTPATH+"\\fd_noSourceCode.txt"));
